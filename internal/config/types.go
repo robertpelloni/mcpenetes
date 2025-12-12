@@ -18,6 +18,9 @@ type Registry struct {
 // Client defines a target client configuration location
 type Client struct {
 	ConfigPath string `yaml:"config_path"`
+	// Type/Format of the client config, used for translation
+	// If empty, defaults will be inferred
+	Type string `yaml:"type,omitempty"`
 }
 
 // BackupConfig defines backup settings
