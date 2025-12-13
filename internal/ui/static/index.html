@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mcpenetes Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        .container { max-width: 1200px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .card { padding: 1rem; border: 1px solid var(--muted-border-color); border-radius: var(--border-radius); }
+        .success { color: var(--ins-color); }
+        .error { color: var(--del-color); }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <nav>
+            <ul>
+                <li><strong>🧙‍♂️ mcpenetes</strong></li>
+            </ul>
+            <ul>
+                <li><a href="#" onclick="loadData()">Refresh</a></li>
+            </ul>
+        </nav>
+
+        <div class="grid">
+            <!-- Detected Clients -->
+            <section>
+                <h3>Detected Clients</h3>
+                <div class="card">
+                    <form id="clientsForm">
+                        <div id="clientsList">Loading...</div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Configured MCP Servers -->
+            <section>
+                <h3>Configured MCP Servers</h3>
+                <div class="card">
+                    <div id="serversList">Loading...</div>
+                </div>
+            </section>
+        </div>
+
+        <hr>
+
+        <!-- Actions -->
+        <section>
+            <h3>Actions</h3>
+            <button onclick="applyConfig()" id="applyBtn">Apply Configuration to Selected Clients</button>
+            <div id="resultArea"></div>
+        </section>
+    </main>
+
+    <script>
+        let configData = null;
+
+        async function loadData() {
+            try {
+                const res = await fetch('/api/data');
+                configData = await res.json();
+                renderClients();
+                renderServers();
+            } catch (e) {
+                console.error(e);
+                document.getElementById('clientsList').innerHTML = `<span class="error">Error loading data: ${e}</span>`;
+            }
+        }
+
+        function renderClients() {
+            const list = document.getElementById('clientsList');
+            if (!configData.clients || Object.keys(configData.clients).length === 0) {
+                list.innerHTML = "No clients detected.";
+                return;
+            }
+
+            let html = '';
+            for (const [name, client] of Object.entries(configData.clients)) {
+                html += `
+                    <label>
+                        <input type="checkbox" name="client" value="${name}" checked>
+                        ${name} <small>(${client.config_path})</small>
+                    </label>
+                `;
+            }
+            list.innerHTML = html;
+        }
+
+        function renderServers() {
+            const list = document.getElementById('serversList');
+            if (!configData.mcpServers || Object.keys(configData.mcpServers).length === 0) {
+                list.innerHTML = "No servers configured.";
+                return;
+            }
+
+            let html = '<ul>';
+            for (const [name, server] of Object.entries(configData.mcpServers)) {
+                let details = server.url ? `URL: ${server.url}` : `Command: ${server.command} ${server.args ? server.args.join(' ') : ''}`;
+                html += `<li><strong>${name}</strong>: ${details}</li>`;
+            }
+            html += '</ul>';
+            list.innerHTML = html;
+        }
+
+        async function applyConfig() {
+            const btn = document.getElementById('applyBtn');
+            const resultArea = document.getElementById('resultArea');
+            btn.setAttribute('aria-busy', 'true');
+            resultArea.innerHTML = '';
+
+            const selected = [];
+            document.querySelectorAll('input[name="client"]:checked').forEach(el => {
+                selected.push(el.value);
+            });
+
+            if (selected.length === 0) {
+                alert("Please select at least one client.");
+                btn.setAttribute('aria-busy', 'false');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/apply', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({clients: selected})
+                });
+                const data = await res.json();
+
+                let html = '<h4>Results</h4><ul>';
+                for (const res of data.results) {
+                    if (res.success) {
+                        html += `<li class="success">✅ ${res.clientName}: Success (Backup: ${res.backupPath})</li>`;
+                    } else {
+                        html += `<li class="error">❌ ${res.clientName}: Failed - ${res.error}</li>`;
+                    }
+                }
+                html += '</ul>';
+                resultArea.innerHTML = html;
+
+            } catch (e) {
+                resultArea.innerHTML = `<span class="error">Request failed: ${e}</span>`;
+            } finally {
+                btn.setAttribute('aria-busy', 'false');
+            }
+        }
+
+        // Initial Load
+        loadData();
+    </script>
+</body>
+</html>
