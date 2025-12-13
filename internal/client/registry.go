@@ -1,0 +1,326 @@
+package client
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+)
+
+// ConfigFormatEnum defines the supported configuration formats
+type ConfigFormatEnum string
+
+const (
+	FormatClaudeDesktop ConfigFormatEnum = "claude-desktop" // {"mcpServers": {...}}
+	FormatVSCode        ConfigFormatEnum = "vscode"         // {"mcp": {"servers": {...}}} or {"mcp.servers": {...}}
+	FormatSimpleJSON    ConfigFormatEnum = "simple-json"    // {"mcpServers": {...}} (Standard MCP)
+	FormatYAML          ConfigFormatEnum = "yaml"           // YAML format
+	FormatTOML          ConfigFormatEnum = "toml"           // TOML format
+)
+
+// BaseDirEnum defines where the config is relative to
+type BaseDirEnum string
+
+const (
+	BaseHome        BaseDirEnum = "home"
+	BaseAppData     BaseDirEnum = "appdata"     // Windows %APPDATA%
+	BaseUserProfile BaseDirEnum = "userprofile" // Windows %USERPROFILE%
+)
+
+// PathDefinition defines a path strategy for a specific OS
+type PathDefinition struct {
+	Base BaseDirEnum
+	Path string // Relative path from the base
+}
+
+// ClientDefinition defines the metadata and paths for a tool
+type ClientDefinition struct {
+	ID           string
+	Name         string
+	ConfigFormat ConfigFormatEnum
+	// Map of OS to list of potential config paths
+	// supported OS keys: "windows", "darwin", "linux"
+	Paths map[string][]PathDefinition
+}
+
+// Registry holds the list of known clients
+var Registry = []ClientDefinition{
+	// --- Desktop IDEs ---
+	{
+		ID:           "claude-desktop",
+		Name:         "Claude Desktop",
+		ConfigFormat: FormatClaudeDesktop,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Claude", "claude_desktop_config.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Claude", "claude_desktop_config.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Claude", "claude_desktop_config.json")},
+			},
+		},
+	},
+	{
+		ID:           "cursor",
+		Name:         "Cursor",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".cursor", "mcp.json")},
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Cursor", "User", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Cursor", "User", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".cursor", "mcp.json")},
+			},
+		},
+	},
+	{
+		ID:           "windsurf",
+		Name:         "Windsurf",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".codeium", "windsurf", "mcp_config.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".codeium", "windsurf", "mcp_config.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".codeium", "windsurf", "mcp_config.json")},
+			},
+		},
+	},
+	{
+		ID:           "vscode",
+		Name:         "VS Code",
+		ConfigFormat: FormatVSCode,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Code", "User", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Code", "User", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Code", "User", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "vscode-insiders",
+		Name:         "VS Code Insiders",
+		ConfigFormat: FormatVSCode,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Code - Insiders", "User", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Code - Insiders", "User", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Code - Insiders", "User", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "zed",
+		Name:         "Zed",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".config", "zed", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Zed", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "zed", "settings.json")},
+			},
+		},
+	},
+
+	// --- VSCode Extensions / "Autonomous Agents" ---
+	{
+		ID:           "cline",
+		Name:         "Cline",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "roo-code",
+		Name:         "Roo Code",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Code", "User", "globalStorage", "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Code", "User", "globalStorage", "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Code", "User", "globalStorage", "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json")},
+			},
+		},
+	},
+
+	// --- Desktop Apps ---
+	{
+		ID:           "lm-studio",
+		Name:         "LM Studio",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".lmstudio", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".lmstudio", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".lmstudio", "mcp.json")},
+			},
+		},
+	},
+	{
+		ID:           "anythingllm",
+		Name:         "AnythingLLM",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "anythingllm-desktop", "storage", "plugins", "anythingllm_mcp_servers.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("anythingllm-desktop", "storage", "plugins", "anythingllm_mcp_servers.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "anythingllm-desktop", "storage", "plugins", "anythingllm_mcp_servers.json")},
+			},
+		},
+	},
+
+	// --- CLIs ---
+	{
+		ID:           "goose",
+		Name:         "Goose CLI",
+		ConfigFormat: FormatYAML,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".config", "goose", "config.yaml")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Block", "goose", "config", "config.yaml")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "goose", "config.yaml")},
+			},
+		},
+	},
+	{
+		ID:           "mistral-vibe",
+		Name:         "Mistral Vibe",
+		ConfigFormat: FormatTOML,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".vibe", "config.toml")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".vibe", "config.toml")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".vibe", "config.toml")},
+			},
+		},
+	},
+}
+
+// DetectedClient represents a client found on the system
+type DetectedClient struct {
+	ID           string
+	Name         string
+	ConfigPath   string
+	ConfigFormat ConfigFormatEnum
+}
+
+// DetectClients scans the system for known clients
+func DetectClients() (map[string]DetectedClient, error) {
+	clients := make(map[string]DetectedClient)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	appData := os.Getenv("APPDATA")
+	userProfile := os.Getenv("USERPROFILE")
+
+	// Pre-calculate base paths
+	basePaths := map[BaseDirEnum]string{
+		BaseHome:        homeDir,
+		BaseAppData:     appData,
+		BaseUserProfile: userProfile,
+	}
+
+	// Windows fallback for AppData
+	if runtime.GOOS == "windows" {
+		if basePaths[BaseAppData] == "" {
+			basePaths[BaseAppData] = homeDir
+		}
+		if basePaths[BaseUserProfile] == "" {
+			basePaths[BaseUserProfile] = homeDir
+		}
+	}
+
+	for _, def := range Registry {
+		paths, ok := def.Paths[runtime.GOOS]
+		if !ok {
+			continue
+		}
+
+		for _, pathDef := range paths {
+			basePath := basePaths[pathDef.Base]
+			if basePath == "" {
+				continue
+			}
+
+			fullPath := filepath.Join(basePath, pathDef.Path)
+
+			// Check if file exists
+			if _, err := os.Stat(fullPath); err == nil {
+				clients[def.ID] = DetectedClient{
+					ID:           def.ID,
+					Name:         def.Name,
+					ConfigPath:   fullPath,
+					ConfigFormat: def.ConfigFormat,
+				}
+				break // Found valid config file
+			}
+
+			// Fallback: Check if directory exists
+			dirPath := filepath.Dir(fullPath)
+			if _, err := os.Stat(dirPath); err == nil {
+				// Directory exists, allow this client so we can create the config file
+				clients[def.ID] = DetectedClient{
+					ID:           def.ID,
+					Name:         def.Name,
+					ConfigPath:   fullPath,
+					ConfigFormat: def.ConfigFormat,
+				}
+				break
+			}
+		}
+	}
+
+	return clients, nil
+}
