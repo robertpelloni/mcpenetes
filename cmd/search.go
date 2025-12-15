@@ -166,7 +166,7 @@ of the cache and fetch the latest data from the registries.`,
 
 		// Add to mcp.json (actual configuration)
 		log.Info("Adding configuration for %s to mcp.json...", serverID)
-		err = search.AddServerToMCPConfig(serverID, selectedServer)
+		err = search.AddServerToMCPConfig(serverID, selectedServer, nil) // Pass nil for config override
 		if err != nil {
 			log.Error("Failed to add to mcp.json: %v", err)
 		} else {

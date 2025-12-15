@@ -1,3 +1,23 @@
+## [1.1.0](https://github.com/tuannvm/mcpenetes/compare/v1.0.1...v1.1.0) (2025-05-27)
+
+### Features
+
+* **client:** add extensive client support including VS Code, Claude, Cursor, Windsurf, Zed, Trae, Goose, Mistral Vibe, and more.
+* **client:** implement user-defined registry for custom tool support via `clients.yaml`.
+* **ui:** add web-based user interface (`mcpenetes ui`) for managing configurations.
+* **ui:** implement install wizard for customizing server commands (npx/uvx) before installation.
+* **search:** refactor search workflow to automatically add default configurations to `mcp.json`.
+* **translator:** add support for JSONC (VS Code settings with comments), YAML, and TOML formats.
+* **translator:** add safe parsing to prevent data loss in existing configuration files.
+* **core:** refactor application logic into reusable `Manager` for CLI and UI consistency.
+* **integration:** add support for JetBrains IDEs via Junie agent.
+* **integration:** add support for Continue extension with nested configuration format.
+
+### Bug Fixes
+
+* **load:** fix clipboard loading crashing on JSON with comments.
+* **search:** fix search command not persisting usable configurations.
+
 ## [1.0.1](https://github.com/tuannvm/mcpenetes/compare/v1.0.0...v1.0.1) (2025-04-25)
 
 # 1.0.0 (2025-04-18)

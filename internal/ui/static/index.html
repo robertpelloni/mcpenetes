@@ -21,7 +21,7 @@
     <main class="container">
         <nav>
             <ul>
-                <li><strong>🧙‍♂️ mcpenetes</strong></li>
+                <li><strong>🧙‍♂️ mcpenetes</strong> <small id="versionDisplay"></small></li>
             </ul>
             <ul>
                 <li><a href="#" onclick="switchTab('dashboard')">Dashboard</a></li>
@@ -79,21 +79,24 @@
         </div>
     </main>
 
-    <!-- Edit Server Modal -->
+    <!-- Edit/Install Server Modal -->
     <dialog id="editModal">
         <article>
             <header>
                 <a href="#close" aria-label="Close" class="close" onclick="closeEditModal()"></a>
-                Edit Server Configuration
+                <span id="modalTitle">Edit Server Configuration</span>
             </header>
             <form id="editForm">
                 <input type="hidden" id="editServerID">
+                <input type="hidden" id="editMode" value="edit"> <!-- 'edit' or 'install' -->
+
                 <label for="editConfigJSON">Configuration (JSON)</label>
                 <textarea id="editConfigJSON" rows="10" style="font-family: monospace;"></textarea>
+                <small>For installation, customize the command and arguments below. Commonly <code>npx -y package-name</code> or <code>uvx package-name</code>.</small>
             </form>
             <footer>
                 <a href="#" role="button" class="secondary" onclick="closeEditModal()">Cancel</a>
-                <a href="#" role="button" onclick="saveServerConfig()">Save</a>
+                <a href="#" role="button" onclick="saveServerConfig()">Save / Install</a>
             </footer>
         </article>
     </dialog>
@@ -110,6 +113,11 @@
             try {
                 const res = await fetch('/api/data');
                 configData = await res.json();
+
+                if (configData.version) {
+                    document.getElementById('versionDisplay').innerText = `v${configData.version}`;
+                }
+
                 renderClients();
                 renderServers();
             } catch (e) {
@@ -150,10 +158,13 @@
                 html += `
                     <li style="margin-bottom: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                            <div>
+                            <div style="flex: 1; margin-right: 1rem;">
                                 <strong>${name}</strong>: ${details}
                             </div>
-                            <button class="outline small" style="margin-left: 1rem; width: auto; padding: 0.25rem 0.5rem;" onclick="openEditModal('${name}')">Edit</button>
+                            <div style="flex-shrink: 0;">
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditModal('${name}')">Edit</button>
+                                <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="deleteServer('${name}')">Delete</button>
+                            </div>
                         </div>
                     </li>`;
             }
@@ -166,8 +177,27 @@
             if (!server) return;
 
             document.getElementById('editServerID').value = serverID;
+            document.getElementById('editMode').value = 'edit';
+            document.getElementById('modalTitle').innerText = `Edit ${serverID}`;
+
             // Pretty print JSON for editing
             document.getElementById('editConfigJSON').value = JSON.stringify(server, null, 2);
+            document.getElementById('editModal').setAttribute('open', 'true');
+        }
+
+        function openInstallModal(serverID) {
+            document.getElementById('editServerID').value = serverID;
+            document.getElementById('editMode').value = 'install';
+            document.getElementById('modalTitle').innerText = `Install ${serverID}`;
+
+            // Default install config template
+            const defaultConfig = {
+                command: "npx",
+                args: ["-y", serverID],
+                env: {}
+            };
+
+            document.getElementById('editConfigJSON').value = JSON.stringify(defaultConfig, null, 2);
             document.getElementById('editModal').setAttribute('open', 'true');
         }
 
@@ -177,6 +207,7 @@
 
         async function saveServerConfig() {
             const serverID = document.getElementById('editServerID').value;
+            const mode = document.getElementById('editMode').value;
             const jsonStr = document.getElementById('editConfigJSON').value;
             let configObj;
 
@@ -188,24 +219,60 @@
             }
 
             try {
-                const res = await fetch('/api/server/update', {
+                let url = '/api/server/update';
+                let body = {
+                    serverId: serverID,
+                    config: configObj
+                };
+
+                if (mode === 'install') {
+                    url = '/api/install';
+                    // install endpoint expects {serverId, config} structure now too
+                }
+
+                const res = await fetch(url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        serverId: serverID,
-                        config: configObj
-                    })
+                    body: JSON.stringify(body)
                 });
 
                 if (res.ok) {
                     closeEditModal();
+                    alert(mode === 'install' ? "Server installed!" : "Configuration saved!");
+                    loadData(); // Refresh list
+                    if (mode === 'install') {
+                        switchTab('dashboard');
+                    }
+                } else {
+                    const err = await res.text();
+                    alert("Failed: " + err);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        async function deleteServer(serverID) {
+            if (!confirm(`Are you sure you want to delete server '${serverID}'? This cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/server/remove', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({serverId: serverID})
+                });
+
+                if (res.ok) {
+                    // alert("Server removed!"); // Optional feedback
                     loadData(); // Refresh list
                 } else {
                     const err = await res.text();
-                    alert("Failed to save: " + err);
+                    alert("Failed to delete: " + err);
                 }
             } catch (e) {
-                alert("Error saving: " + e);
+                alert("Error deleting server: " + e);
             }
         }
 
@@ -277,7 +344,7 @@
                             <td><strong>${s.Name}</strong></td>
                             <td>${s.Description}</td>
                             <td>
-                                <button onclick="installServer('${s.Name}')" class="secondary outline">Install</button>
+                                <button onclick="openInstallModal('${s.Name}')" class="secondary outline">Install</button>
                                 ${s.RepositoryURL ? `<a href="${s.RepositoryURL}" target="_blank" role="button" class="outline">View Repo</a>` : ''}
                             </td>
                         </tr>
@@ -290,28 +357,6 @@
                 resultArea.innerHTML = `<span class="error">Search failed: ${e}</span>`;
             } finally {
                 btn.setAttribute('aria-busy', 'false');
-            }
-        }
-
-        async function installServer(serverID) {
-            if (!confirm(`Install ${serverID}? This will add a default configuration to mcp.json.`)) return;
-
-            try {
-                const res = await fetch('/api/install', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({serverId: serverID})
-                });
-
-                if (res.ok) {
-                    alert(`Server ${serverID} added! Please check the configuration.`);
-                    loadData(); // Refresh main list
-                } else {
-                    const err = await res.text();
-                    alert(`Failed to install: ${err}`);
-                }
-            } catch (e) {
-                alert(`Error: ${e}`);
             }
         }
 
