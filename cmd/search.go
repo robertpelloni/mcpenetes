@@ -13,6 +13,7 @@ import (
 	"github.com/tuannvm/mcpenetes/internal/config"
 	"github.com/tuannvm/mcpenetes/internal/log"
 	"github.com/tuannvm/mcpenetes/internal/registry"
+	"github.com/tuannvm/mcpenetes/internal/search"
 )
 
 // ServerInfo represents information about an MCP server
@@ -28,8 +29,9 @@ var searchCmd = &cobra.Command{
 	Short: "Interactive fuzzy search for MCP versions and apply them",
 	Long: `Provides an interactive fuzzy search interface to find and select MCP versions from configured registries.
 If a server ID is provided as an argument, it will directly use that server without prompting.
-After selection, adds the server to the 'mcps' list in config.yaml.
-This determines which server configuration will be used by the 'reload' command.
+After selection, the server is added to the local mcp.json configuration file.
+Note: Since the registry may not provide specific execution commands, a default 'npx' configuration is added.
+You should review 'mcp.json' to ensure the command and arguments are correct.
 
 By default, search results are cached to improve performance. Use the --refresh flag to force a refresh
 of the cache and fetch the latest data from the registries.`,
@@ -51,142 +53,127 @@ of the cache and fetch the latest data from the registries.`,
 			log.Fatal("Error loading config: %v", err)
 		}
 
+		var serverID string
+		var selectedServer *registry.ServerData
+
 		// Direct server selection if argument provided
 		if len(args) == 1 {
-			serverID := args[0]
+			serverID = args[0]
 			log.Info("Using provided server ID: %s", serverID)
+			// We don't have server data if passed directly, unless we fetch?
+			// For simplicity, we just use the ID.
+		} else {
+			// Interactive selection mode
+			log.Info("Starting interactive search...")
 
-			// Add the selected server to the MCPs list in config
-			cfg.MCPs = append(cfg.MCPs, serverID)
-
-			// Save the updated config
-			if err := config.SaveConfig(cfg); err != nil {
-				log.Fatal("Error saving config: %v", err)
+			if len(cfg.Registries) == 0 {
+				log.Warn("No registries configured. Use 'mcpetes add registry <n> <url>' to add one.")
+				return
 			}
 
-			log.Success("Successfully added MCP '%s' to the list. Run 'mcpetes reload' to apply.", serverID)
-			return
-		}
+			// Start spinner
+			s := spinner.New(spinner.CharSets[9], 100*time.Millisecond)
+			s.Suffix = " Fetching available MCPs..."
+			s.Start()
 
-		// Interactive selection mode
-		log.Info("Starting interactive search...")
+			var serverInfos []ServerInfo
+			var displayOptions []string
+			serverMap := make(map[string]registry.ServerData)
 
-		if len(cfg.Registries) == 0 {
-			log.Warn("No registries configured. Use 'mcpetes add registry <n> <url>' to add one.")
-			return
-		}
+			for _, reg := range cfg.Registries {
+				servers, err := registry.FetchMCPServersWithCache(reg.URL, forceRefresh)
+				if err != nil {
+					log.Warn("Error fetching from registry %s: %v", reg.URL, err)
+					continue
+				}
 
-		// Start spinner
-		s := spinner.New(spinner.CharSets[9], 100*time.Millisecond)
-		s.Suffix = " Fetching available MCPs..."
-		s.Start()
+				for _, server := range servers {
+					info := ServerInfo{
+						Name:          server.Name,
+						Description:   server.Description,
+						RepositoryURL: server.RepositoryURL,
+					}
+					serverInfos = append(serverInfos, info)
 
-		var serverInfos []ServerInfo
-		var displayOptions []string
+					// Store original server data for later use
+					serverMap[server.Name] = server
 
-		for _, reg := range cfg.Registries {
-			servers, err := registry.FetchMCPServersWithCache(reg.URL, forceRefresh)
+					// Create display option string
+					displayText := server.Name
+					if server.Description != "" {
+						displayText = fmt.Sprintf("%s: %s", server.Name, server.Description)
+					}
+					displayOptions = append(displayOptions, displayText)
+				}
+			}
+
+			s.Stop()
+
+			if len(serverInfos) == 0 {
+				log.Warn("No MCP servers found in any registry")
+				return
+			}
+
+			var selectedOption string
+			prompt := &survey.Select{
+				Message: "Select MCP server:",
+				Options: displayOptions,
+			}
+
+			err = survey.AskOne(prompt, &selectedOption)
 			if err != nil {
-				log.Warn("Error fetching from registry %s: %v", reg.URL, err)
-				continue
+				log.Fatal("Error during selection: %v", err)
+				return
 			}
 
-			for _, server := range servers {
-				info := ServerInfo{
-					Name:          server.Name,
-					Description:   server.Description,
-					RepositoryURL: server.RepositoryURL,
+			// Find the index/ID
+			for i, opt := range displayOptions {
+				if opt == selectedOption {
+					serverID = serverInfos[i].Name
+					// Get full data
+					if data, ok := serverMap[serverID]; ok {
+						selectedServer = &data
+					}
+					break
 				}
-				serverInfos = append(serverInfos, info)
-
-				// Create display option string
-				displayText := server.Name
-				if server.Description != "" {
-					displayText = fmt.Sprintf("%s: %s", server.Name, server.Description)
-				}
-				displayOptions = append(displayOptions, displayText)
 			}
 		}
 
-		s.Stop()
-
-		if len(serverInfos) == 0 {
-			log.Warn("No MCP servers found in any registry")
-			return
+		if serverID == "" {
+			log.Fatal("No server selected")
 		}
 
-		var selectedOption string
-		prompt := &survey.Select{
-			Message: "Select MCP server:",
-			Options: displayOptions,
-		}
+		log.Info("Selected MCP: %s", serverID)
 
-		err = survey.AskOne(prompt, &selectedOption)
-		if err != nil {
-			log.Fatal("Error during selection: %v", err)
-			return
-		}
-
-		// Find the index of the selected option
-		selectedIndex := -1
-		for i, opt := range displayOptions {
-			if opt == selectedOption {
-				selectedIndex = i
-				break
-			}
-		}
-
-		if selectedIndex == -1 {
-			log.Fatal("Selected option not found in options list")
-			return
-		}
-
-		selectedServer := serverInfos[selectedIndex]
-		log.Info("Selected MCP: %s", selectedServer.Name)
-
-		// If repository URL is available, ask if user wants to open it
-		if selectedServer.RepositoryURL != "" {
+		// Ask to open repo if available
+		if selectedServer != nil && selectedServer.RepositoryURL != "" {
 			var openRepo bool
 			confirmPrompt := &survey.Confirm{
 				Message: fmt.Sprintf("Would you like to open the repository URL (%s) in your browser?", selectedServer.RepositoryURL),
 				Default: true,
 			}
-
-			err = survey.AskOne(confirmPrompt, &openRepo)
-			if err != nil {
-				log.Warn("Error during confirmation: %v", err)
-			}
-
+			_ = survey.AskOne(confirmPrompt, &openRepo) // Ignore error, optional
 			if openRepo {
-				err := openBrowser(selectedServer.RepositoryURL)
-				if err != nil {
-					log.Warn("Failed to open browser: %v", err)
-				} else {
-					log.Info("Opened repository URL in browser")
-					log.Info("After copying the configuration, run 'mcpenetes load' to load it from clipboard")
-					return
-				}
+				_ = openBrowser(selectedServer.RepositoryURL)
 			}
 		}
 
-		// If user didn't open repo or there was an error, use the selected MCP
-		serverID := selectedServer.Name
-		log.Info("Using server ID: %s", serverID)
-
-		cfg, err = config.LoadConfig()
-		if err != nil {
-			log.Fatal("Error loading config: %v", err)
-		}
-
-		// Add the selected server to the MCPs list in config
+		// Add to config.yaml (legacy/tracking)
 		cfg.MCPs = append(cfg.MCPs, serverID)
-
-		// Save the updated config
 		if err := config.SaveConfig(cfg); err != nil {
 			log.Fatal("Error saving config: %v", err)
 		}
 
-		log.Success("Successfully added MCP '%s' to the list. Run 'mcpetes reload' to apply.", serverID)
+		// Add to mcp.json (actual configuration)
+		log.Info("Adding configuration for %s to mcp.json...", serverID)
+		err = search.AddServerToMCPConfig(serverID, selectedServer)
+		if err != nil {
+			log.Error("Failed to add to mcp.json: %v", err)
+		} else {
+			log.Success("Successfully added %s to mcp.json.", serverID)
+			log.Info("Note: A default 'npx' command was configured. Please check 'mcp.json' if you need to adjust arguments or environment variables.")
+			log.Info("Run 'mcpenetes apply' to install this server to your clients.")
+		}
 	},
 }
 
