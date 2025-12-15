@@ -151,6 +151,8 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 				formatType = client.FormatClaudeDesktop
 			} else if strings.Contains(clientName, "vscode") {
 				formatType = client.FormatVSCode
+			} else if strings.Contains(strings.ToLower(clientName), "continue") {
+				formatType = client.FormatContinue
 			} else {
 				formatType = client.FormatSimpleJSON
 			}
@@ -292,6 +294,81 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 			return fmt.Errorf("failed to marshal VS Code config: %w", err)
 		}
 
+	case client.FormatContinue:
+		// Continue uses nested structure:
+		// "experimental": { "modelContextProtocolServers": [ { "name": "...", "transport": { ... } } ] }
+		var continueConfig map[string]interface{}
+		if err := parseJSONSafe(clientConfigPath, &continueConfig); err != nil {
+			return err
+		}
+		if continueConfig == nil {
+			continueConfig = make(map[string]interface{})
+		}
+
+		// Ensure experimental object exists
+		if _, ok := continueConfig["experimental"]; !ok {
+			continueConfig["experimental"] = make(map[string]interface{})
+		}
+		experimental := continueConfig["experimental"].(map[string]interface{})
+
+		// Ensure modelContextProtocolServers list exists
+		if _, ok := experimental["modelContextProtocolServers"]; !ok {
+			experimental["modelContextProtocolServers"] = []interface{}{}
+		}
+
+		// Convert existing list to a map for easy updating
+		serversList, ok := experimental["modelContextProtocolServers"].([]interface{})
+		if !ok {
+			// If it's not a list, maybe reset it?
+			serversList = []interface{}{}
+		}
+
+		// Check if server already exists in list and update it, or append
+		found := false
+		newServerEntry := map[string]interface{}{
+			"name": serverID,
+			"transport": map[string]interface{}{
+				"type": "stdio", // Defaulting to stdio, check logic if http/sse is needed
+				"command": serverConf.Command,
+				"args": serverConf.Args,
+				"env": serverConf.Env,
+			},
+		}
+
+		if serverConf.URL != "" {
+			// Handle HTTP/SSE transport mapping if applicable
+			// Continue supports "type": "sse" with "url"
+			// Assuming "url" implies SSE or HTTP
+			newServerEntry["transport"] = map[string]interface{}{
+				"type": "sse", // Simplification
+				"url": serverConf.URL,
+			}
+		}
+
+		updatedList := []interface{}{}
+		for _, s := range serversList {
+			sMap, ok := s.(map[string]interface{})
+			if !ok { continue }
+			if name, ok := sMap["name"].(string); ok && name == serverID {
+				updatedList = append(updatedList, newServerEntry)
+				found = true
+			} else {
+				updatedList = append(updatedList, s)
+			}
+		}
+
+		if !found {
+			updatedList = append(updatedList, newServerEntry)
+		}
+
+		experimental["modelContextProtocolServers"] = updatedList
+		continueConfig["experimental"] = experimental
+
+		outputData, err = json.MarshalIndent(continueConfig, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal Continue config: %w", err)
+		}
+
 	case client.FormatYAML:
 		var yamlConfig map[string]interface{}
 
@@ -355,7 +432,7 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 
 		buf := new(bytes.Buffer)
 		if err := toml.NewEncoder(buf).Encode(tomlConfig); err != nil {
-			return fmt.Errorf("failed to marshal TOML config: %w", err)
+			return fmt.Errorf("failed to marshal updated TOML config: %w", err)
 		}
 		outputData = buf.Bytes()
 
@@ -440,6 +517,8 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 				formatType = client.FormatClaudeDesktop
 			} else if strings.Contains(clientName, "vscode") {
 				formatType = client.FormatVSCode
+			} else if strings.Contains(strings.ToLower(clientName), "continue") {
+				formatType = client.FormatContinue
 			} else {
 				formatType = client.FormatSimpleJSON
 			}
@@ -508,6 +587,11 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 			}
 			return os.WriteFile(clientConfigPath, outputData, 0644)
 		}
+
+	case client.FormatContinue:
+		// Not implementing removal for Continue format in this patch yet as it involves list filtering
+		// leaving as TODO or simple log
+		fmt.Println("Warning: Automatic removal of obsolete servers not yet implemented for Continue format")
 
 	case client.FormatYAML:
 		var clientConfig map[string]interface{}

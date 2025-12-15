@@ -1,9 +1,12 @@
 package client
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ConfigFormatEnum defines the supported configuration formats
@@ -15,6 +18,7 @@ const (
 	FormatSimpleJSON    ConfigFormatEnum = "simple-json"    // {"mcpServers": {...}} (Standard MCP)
 	FormatYAML          ConfigFormatEnum = "yaml"           // YAML format
 	FormatTOML          ConfigFormatEnum = "toml"           // TOML format
+	FormatContinue      ConfigFormatEnum = "continue"       // Continue.dev config.json structure
 )
 
 // BaseDirEnum defines where the config is relative to
@@ -208,6 +212,22 @@ var Registry = []ClientDefinition{
 			},
 		},
 	},
+	{
+		ID:           "continue",
+		Name:         "Continue",
+		ConfigFormat: FormatContinue,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".continue", "config.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".continue", "config.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".continue", "config.json")},
+			},
+		},
+	},
 
 	// --- Desktop Apps ---
 	{
@@ -340,6 +360,54 @@ var Registry = []ClientDefinition{
 			},
 		},
 	},
+	{
+		ID:           "aider",
+		Name:         "Aider",
+		ConfigFormat: FormatYAML,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".aider.conf.yml")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".aider.conf.yml")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".aider.conf.yml")},
+			},
+		},
+	},
+	{
+		ID:           "pearai",
+		Name:         "PearAI",
+		ConfigFormat: FormatSimpleJSON, // VSCode fork, uses settings.json
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "PearAI", "User", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("PearAI", "User", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "PearAI", "User", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "void",
+		Name:         "Void",
+		ConfigFormat: FormatVSCode, // VSCode fork
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Void", "User", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Void", "User", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Void", "User", "settings.json")},
+			},
+		},
+	},
 }
 
 // DetectedClient represents a client found on the system
@@ -349,6 +417,9 @@ type DetectedClient struct {
 	ConfigPath   string
 	ConfigFormat ConfigFormatEnum
 }
+
+// UserRegistryFile is the path to the user-defined registry file
+const UserRegistryFile = "clients.yaml"
 
 // DetectClients scans the system for known clients
 func DetectClients() (map[string]DetectedClient, error) {
@@ -378,7 +449,22 @@ func DetectClients() (map[string]DetectedClient, error) {
 		}
 	}
 
-	for _, def := range Registry {
+	// Combine built-in registry with user-defined registry
+	registryToScan := Registry
+
+	// Load user-defined registry
+	configDir := filepath.Join(homeDir, ".config", "mcpetes")
+	userRegPath := filepath.Join(configDir, UserRegistryFile)
+	if data, err := os.ReadFile(userRegPath); err == nil {
+		var userClients []ClientDefinition
+		if err := yaml.Unmarshal(data, &userClients); err == nil {
+			registryToScan = append(registryToScan, userClients...)
+		} else {
+			fmt.Printf("Warning: Failed to parse user registry at %s: %v\n", userRegPath, err)
+		}
+	}
+
+	for _, def := range registryToScan {
 		paths, ok := def.Paths[runtime.GOOS]
 		if !ok {
 			continue
