@@ -262,6 +262,23 @@ var Registry = []ClientDefinition{
 			},
 		},
 	},
+	{
+		ID:           "tabby",
+		Name:         "Tabby",
+		ConfigFormat: FormatTOML, // Tabby uses config.toml
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".tabby-client", "agent", "config.toml")}, // Typical agent config
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Tabby", "config.toml")}, // Check specific location, often user profile or appdata
+				{Base: BaseUserProfile, Path: filepath.Join(".tabby-client", "agent", "config.toml")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".tabby-client", "agent", "config.toml")},
+			},
+		},
+	},
 
 	// --- CLIs ---
 	{

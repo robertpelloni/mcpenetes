@@ -49,6 +49,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/search", s.handleSearch)
 	mux.HandleFunc("/api/install", s.handleInstall)
 	mux.HandleFunc("/api/server/update", s.handleUpdateServer)
+	mux.HandleFunc("/api/server/remove", s.handleRemoveServer) // New endpoint
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -75,6 +76,10 @@ type InstallRequest struct {
 type UpdateServerRequest struct {
 	ServerID string           `json:"serverId"`
 	Config   config.MCPServer `json:"config"`
+}
+
+type RemoveServerRequest struct {
+	ServerID string `json:"serverId"`
 }
 
 type ApplyResponse struct {
@@ -283,4 +288,43 @@ func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Server configuration updated"})
+}
+
+func (s *Server) handleRemoveServer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RemoveServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ServerID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	mcpCfg, err := config.LoadMCPConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading MCP config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if _, ok := mcpCfg.MCPServers[req.ServerID]; !ok {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	delete(mcpCfg.MCPServers, req.ServerID)
+
+	if err := config.SaveMCPConfig(mcpCfg); err != nil {
+		http.Error(w, fmt.Sprintf("Error saving MCP config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Server removed from configuration"})
 }
