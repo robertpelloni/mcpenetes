@@ -13,6 +13,8 @@
         .error { color: var(--del-color); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        .modal { display: none; }
+        .modal[open] { display: block; }
     </style>
 </head>
 <body>
@@ -77,6 +79,25 @@
         </div>
     </main>
 
+    <!-- Edit Server Modal -->
+    <dialog id="editModal">
+        <article>
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeEditModal()"></a>
+                Edit Server Configuration
+            </header>
+            <form id="editForm">
+                <input type="hidden" id="editServerID">
+                <label for="editConfigJSON">Configuration (JSON)</label>
+                <textarea id="editConfigJSON" rows="10" style="font-family: monospace;"></textarea>
+            </form>
+            <footer>
+                <a href="#" role="button" class="secondary" onclick="closeEditModal()">Cancel</a>
+                <a href="#" role="button" onclick="saveServerConfig()">Save</a>
+            </footer>
+        </article>
+    </dialog>
+
     <script>
         let configData = null;
 
@@ -126,10 +147,66 @@
             let html = '<ul>';
             for (const [name, server] of Object.entries(configData.mcpServers)) {
                 let details = server.url ? `URL: ${server.url}` : `Command: ${server.command} ${server.args ? server.args.join(' ') : ''}`;
-                html += `<li><strong>${name}</strong>: ${details}</li>`;
+                html += `
+                    <li style="margin-bottom: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <strong>${name}</strong>: ${details}
+                            </div>
+                            <button class="outline small" style="margin-left: 1rem; width: auto; padding: 0.25rem 0.5rem;" onclick="openEditModal('${name}')">Edit</button>
+                        </div>
+                    </li>`;
             }
             html += '</ul>';
             list.innerHTML = html;
+        }
+
+        function openEditModal(serverID) {
+            const server = configData.mcpServers[serverID];
+            if (!server) return;
+
+            document.getElementById('editServerID').value = serverID;
+            // Pretty print JSON for editing
+            document.getElementById('editConfigJSON').value = JSON.stringify(server, null, 2);
+            document.getElementById('editModal').setAttribute('open', 'true');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').removeAttribute('open');
+        }
+
+        async function saveServerConfig() {
+            const serverID = document.getElementById('editServerID').value;
+            const jsonStr = document.getElementById('editConfigJSON').value;
+            let configObj;
+
+            try {
+                configObj = JSON.parse(jsonStr);
+            } catch (e) {
+                alert("Invalid JSON: " + e);
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/server/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        serverId: serverID,
+                        config: configObj
+                    })
+                });
+
+                if (res.ok) {
+                    closeEditModal();
+                    loadData(); // Refresh list
+                } else {
+                    const err = await res.text();
+                    alert("Failed to save: " + err);
+                }
+            } catch (e) {
+                alert("Error saving: " + e);
+            }
         }
 
         async function applyConfig() {

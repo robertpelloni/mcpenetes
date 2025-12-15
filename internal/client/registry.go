@@ -158,6 +158,22 @@ var Registry = []ClientDefinition{
 			},
 		},
 	},
+	{
+		ID:           "jetbrains-junie",
+		Name:         "JetBrains (Junie)",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".junie", "mcp", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseHome, Path: filepath.Join(".junie", "mcp", "mcp.json")}, // Note: Docs say ~/.junie even on Windows, need to verify if it respects %USERPROFILE% (which BaseHome maps to on detection)
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".junie", "mcp", "mcp.json")},
+			},
+		},
+	},
 
 	// --- VSCode Extensions / "Autonomous Agents" ---
 	{

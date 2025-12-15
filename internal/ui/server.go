@@ -46,7 +46,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/data", s.handleGetData)
 	mux.HandleFunc("/api/apply", s.handleApply)
 	mux.HandleFunc("/api/search", s.handleSearch)
-	mux.HandleFunc("/api/install", s.handleInstall) // New endpoint
+	mux.HandleFunc("/api/install", s.handleInstall)
+	mux.HandleFunc("/api/server/update", s.handleUpdateServer) // New endpoint
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -66,6 +67,11 @@ type ApplyRequest struct {
 
 type InstallRequest struct {
 	ServerID string `json:"serverId"`
+}
+
+type UpdateServerRequest struct {
+	ServerID string           `json:"serverId"`
+	Config   config.MCPServer `json:"config"`
 }
 
 type ApplyResponse struct {
@@ -256,4 +262,39 @@ func (s *Server) handleInstall(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Server added to configuration"})
+}
+
+func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req UpdateServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ServerID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	mcpCfg, err := config.LoadMCPConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading MCP config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Update the configuration
+	mcpCfg.MCPServers[req.ServerID] = req.Config
+
+	if err := config.SaveMCPConfig(mcpCfg); err != nil {
+		http.Error(w, fmt.Sprintf("Error saving MCP config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Server configuration updated"})
 }
