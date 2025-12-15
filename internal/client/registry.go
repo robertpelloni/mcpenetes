@@ -18,6 +18,7 @@ const (
 	FormatSimpleJSON    ConfigFormatEnum = "simple-json"    // {"mcpServers": {...}} (Standard MCP)
 	FormatYAML          ConfigFormatEnum = "yaml"           // YAML format
 	FormatTOML          ConfigFormatEnum = "toml"           // TOML format
+	FormatContinue      ConfigFormatEnum = "continue"       // Continue.dev config.json structure
 )
 
 // BaseDirEnum defines where the config is relative to
@@ -208,6 +209,22 @@ var Registry = []ClientDefinition{
 			},
 			"linux": {
 				{Base: BaseHome, Path: filepath.Join(".config", "Code", "User", "globalStorage", "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "continue",
+		Name:         "Continue",
+		ConfigFormat: FormatContinue,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".continue", "config.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".continue", "config.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".continue", "config.json")},
 			},
 		},
 	},

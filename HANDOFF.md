@@ -2,7 +2,7 @@
 
 ## 📅 Session Summary
 **Date:** 2025-05-27
-**Status:** Major refactor completed. Web UI added. Extensive tool support added.
+**Status:** Major refactor completed. Web UI added. Extensive tool support added (20+ clients). User extensibility enabled.
 
 This session focused on transforming `mcpenetes` from a simple CLI tool into a comprehensive configuration manager for the Model Context Protocol (MCP) ecosystem. We addressed the user's need to support a vast array of AI tools (IDEs, CLIs, Desktop Apps) and provided a graphical interface.
 
@@ -11,6 +11,7 @@ This session focused on transforming `mcpenetes` from a simple CLI tool into a c
 ### 1. Client Registry (`internal/client`)
 We moved away from hardcoded detection logic in `util` to a data-driven **Registry** approach.
 -   **`Registry`**: A slice of `ClientDefinition` structs defining the Tool ID, Name, Config Format, and OS-specific paths.
+-   **User-Defined Registry**: The tool now automatically loads custom client definitions from `~/.config/mcpetes/clients.yaml` (or equivalent on Windows), allowing users to support new tools without waiting for a release.
 -   **`ConfigFormatEnum`**: explicit support for:
     -   `simple-json`: Standard `{"mcpServers": {...}}` (Claude, Cursor, etc.)
     -   `vscode`: Nested `{"mcp": {"servers": {...}}}`
@@ -30,7 +31,11 @@ We moved away from hardcoded detection logic in `util` to a data-driven **Regist
     -   `POST /api/apply`: Applies configs to selected clients.
     -   `POST /api/install`: Adds a server from the registry to `mcp.json` (defaults to `npx` execution).
     -   `POST /api/server/update`: Updates server config directly (Edit feature).
--   **Frontend**: Single-page dashboard using Pico.css.
+-   **Frontend**: Single-page dashboard using Pico.css with features to:
+    -   View detected clients and configured servers.
+    -   Search specifically for MCP servers in registries.
+    -   Install new servers with a default configuration.
+    -   **Edit** existing server configurations via a JSON modal.
 
 ### 4. Robust Translation (`internal/translator`)
 -   **JSONC Support**: Integrated `github.com/tailscale/hujson` to safely parse VS Code `settings.json` files containing comments.
@@ -52,6 +57,8 @@ The following clients are currently supported in `internal/client/registry.go`:
 | `jetbrains-junie`| JetBrains (Junie)| JSON | Detects `~/.junie/mcp/mcp.json` |
 | `cline` | Cline | JSON | VS Code Extension |
 | `roo-code` | Roo Code | JSON | VS Code Extension |
+| `pearai` | PearAI | JSON | VS Code Fork |
+| `void` | Void | VSCode-JSON | VS Code Fork |
 | `lm-studio` | LM Studio | JSON | |
 | `anythingllm` | AnythingLLM | JSON | |
 | `goose` | Goose CLI | YAML | |
@@ -60,6 +67,7 @@ The following clients are currently supported in `internal/client/registry.go`:
 | `grok-cli` | Grok CLI | JSON | |
 | `open-interpreter`| Open Interpreter | YAML | |
 | `factory-cli` | Factory CLI | JSON | |
+| `aider` | Aider | YAML | |
 
 ## 🧠 Findings & Decisions
 
@@ -69,11 +77,10 @@ The following clients are currently supported in `internal/client/registry.go`:
 
 ## 🚀 Future Roadmap
 
-1.  **User-Defined Registry**: Implement loading of `clients.yaml` from the user's config directory. This enables users to add support for the "long tail" of tools (Adrenaline, Aider, etc.) without modifying the source code.
-2.  **Expanded Built-in Support**: Continue adding definitions for popular tools from the user's CSV list (Aider, PearAI, Void).
-3.  **UI Enhancements**:
+1.  **More Format Support**: Adding `FormatContinue` for "Continue" (extension) which uses a specific nested array structure.
+2.  **UI Enhancements**:
     -   Log viewer for the MCP servers? (Hard since they run inside the clients).
-    -   Better "Install" wizard that asks for `command` and `args` instead of defaulting to `npx`.
+    -   Advanced "Install" wizard that allows customizing `command` and `args` instead of defaulting to `npx`.
 
 ## 📝 Memories
 -   The project uses `github.com/tailscale/hujson` to parse JSONC.
