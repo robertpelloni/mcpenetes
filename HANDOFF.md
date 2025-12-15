@@ -2,7 +2,7 @@
 
 ## 📅 Session Summary
 **Date:** 2025-05-27
-**Status:** Major refactor completed. Web UI added. Extensive tool support added (20+ clients). User extensibility enabled.
+**Status:** Major refactor completed. Web UI added. Extensive tool support added (25+ clients). User extensibility enabled.
 
 This session focused on transforming `mcpenetes` from a simple CLI tool into a comprehensive configuration manager for the Model Context Protocol (MCP) ecosystem. We addressed the user's need to support a vast array of AI tools (IDEs, CLIs, Desktop Apps) and provided a graphical interface.
 
@@ -18,6 +18,7 @@ We moved away from hardcoded detection logic in `util` to a data-driven **Regist
     -   `claude-desktop`: Specific handling for Claude Desktop.
     -   `yaml`: For tools like Goose CLI.
     -   `toml`: For tools like Mistral Vibe.
+    -   `continue`: For the Continue extension's nested array format.
 -   **`PathDefinition`**: Supports paths relative to `BaseHome`, `BaseAppData`, and `BaseUserProfile`.
 
 ### 2. Core Logic (`internal/core`)
@@ -31,11 +32,13 @@ We moved away from hardcoded detection logic in `util` to a data-driven **Regist
     -   `POST /api/apply`: Applies configs to selected clients.
     -   `POST /api/install`: Adds a server from the registry to `mcp.json` (defaults to `npx` execution).
     -   `POST /api/server/update`: Updates server config directly (Edit feature).
+    -   `POST /api/server/remove`: Removes a server configuration (Delete feature).
 -   **Frontend**: Single-page dashboard using Pico.css with features to:
     -   View detected clients and configured servers.
     -   Search specifically for MCP servers in registries.
-    -   Install new servers with a default configuration.
+    -   Install new servers with a customizable command wizard.
     -   **Edit** existing server configurations via a JSON modal.
+    -   **Delete** server configurations.
 
 ### 4. Robust Translation (`internal/translator`)
 -   **JSONC Support**: Integrated `github.com/tailscale/hujson` to safely parse VS Code `settings.json` files containing comments.
@@ -57,10 +60,12 @@ The following clients are currently supported in `internal/client/registry.go`:
 | `jetbrains-junie`| JetBrains (Junie)| JSON | Detects `~/.junie/mcp/mcp.json` |
 | `cline` | Cline | JSON | VS Code Extension |
 | `roo-code` | Roo Code | JSON | VS Code Extension |
+| `continue` | Continue | Custom | VS Code Extension |
 | `pearai` | PearAI | JSON | VS Code Fork |
 | `void` | Void | VSCode-JSON | VS Code Fork |
 | `lm-studio` | LM Studio | JSON | |
 | `anythingllm` | AnythingLLM | JSON | |
+| `tabby` | Tabby | TOML | |
 | `goose` | Goose CLI | YAML | |
 | `mistral-vibe` | Mistral Vibe | TOML | |
 | `code-cli` | Code CLI (Codex) | JSON | |
@@ -77,10 +82,10 @@ The following clients are currently supported in `internal/client/registry.go`:
 
 ## 🚀 Future Roadmap
 
-1.  **More Format Support**: Adding `FormatContinue` for "Continue" (extension) which uses a specific nested array structure.
+1.  **More Tool Support**: Keep expanding the registry as new tools emerge (LibreChat, etc.).
 2.  **UI Enhancements**:
     -   Log viewer for the MCP servers? (Hard since they run inside the clients).
-    -   Advanced "Install" wizard that allows customizing `command` and `args` instead of defaulting to `npx`.
+    -   Visual editor for `config.yaml` (Registries management).
 
 ## 📝 Memories
 -   The project uses `github.com/tailscale/hujson` to parse JSONC.
