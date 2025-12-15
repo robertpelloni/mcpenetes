@@ -14,6 +14,7 @@ import (
 	"github.com/tuannvm/mcpenetes/internal/registry"
 	"github.com/tuannvm/mcpenetes/internal/search"
 	"github.com/tuannvm/mcpenetes/internal/util"
+	"github.com/tuannvm/mcpenetes/internal/version"
 )
 
 //go:embed static/*
@@ -56,6 +57,7 @@ func (s *Server) Start() error {
 
 // Response structs
 type ConfigDataResponse struct {
+	Version    string                   `json:"version"`
 	Clients    map[string]config.Client `json:"clients"`
 	MCPServers map[string]config.MCPServer `json:"mcpServers"`
 	Registries []config.Registry `json:"registries"`
@@ -101,6 +103,7 @@ func (s *Server) handleGetData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := ConfigDataResponse{
+		Version:    version.Version,
 		Clients:    cfg.Clients,
 		MCPServers: mcpCfg.MCPServers,
 		Registries: cfg.Registries,

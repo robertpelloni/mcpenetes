@@ -1,19 +1,23 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/tuannvm/mcpenetes/internal/version"
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "mcpetes",
 	Short: "A CLI tool to manage multiple MCP endpoint configurations.",
-	Long: `mcpetes helps you switch between different Model Context Protocol (MCP)
+	Long: fmt.Sprintf(`mcpetes v%s
+
+mcpetes helps you switch between different Model Context Protocol (MCP)
 server configurations defined in a central mcp.json file or fetched from registries.
 It can update configuration files for various clients (like VS Code extensions)
-based on the selected MCP server.`,
+based on the selected MCP server.`, version.Version),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Initialize logging level based on flags
 		// verbose, _ := cmd.Flags().GetBool("verbose") // Flags can be checked in specific commands if needed
@@ -47,4 +51,13 @@ func init() {
 	
 	// Disable the auto-generated completion command as requested
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
+	// Add version command
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print the version number",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("mcpetes v%s\n", version.Version)
+		},
+	})
 }

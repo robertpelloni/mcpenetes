@@ -21,7 +21,7 @@
     <main class="container">
         <nav>
             <ul>
-                <li><strong>🧙‍♂️ mcpenetes</strong></li>
+                <li><strong>🧙‍♂️ mcpenetes</strong> <small id="versionDisplay"></small></li>
             </ul>
             <ul>
                 <li><a href="#" onclick="switchTab('dashboard')">Dashboard</a></li>
@@ -113,6 +113,11 @@
             try {
                 const res = await fetch('/api/data');
                 configData = await res.json();
+
+                if (configData.version) {
+                    document.getElementById('versionDisplay').innerText = `v${configData.version}`;
+                }
+
                 renderClients();
                 renderServers();
             } catch (e) {
