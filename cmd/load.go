@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/tailscale/hujson"
 	"github.com/tuannvm/mcpenetes/internal/config"
 	"github.com/tuannvm/mcpenetes/internal/log"
 )
@@ -32,9 +33,16 @@ var loadCmd = &cobra.Command{
 			return
 		}
 
+		// Use hujson to sanitize potentially commented JSON from clipboard
+		standardized, err := hujson.Standardize([]byte(clipboardContent))
+		if err != nil {
+			log.Fatal("Failed to standardize clipboard content (invalid JSONC?): %v", err)
+			return
+		}
+
 		// Parse clipboard content as JSON
 		var clipboardData map[string]interface{}
-		err = json.Unmarshal([]byte(clipboardContent), &clipboardData)
+		err = json.Unmarshal(standardized, &clipboardData)
 		if err != nil {
 			log.Fatal("Failed to parse clipboard content as JSON: %v", err)
 			return
@@ -84,7 +92,8 @@ var loadCmd = &cobra.Command{
 			return
 		}
 
-		log.Info("Successfully loaded MCP configuration from clipboard")
+		log.Success("Successfully loaded MCP configuration from clipboard")
+		log.Info("Run 'mcpenetes apply' to install these servers to your clients.")
 	},
 }
 
@@ -98,6 +107,7 @@ func getClipboard() (string, error) {
 	case "darwin":
 		cmd = exec.Command("pbpaste")
 	case "linux":
+		// Try xclip first, fallback to wl-paste?
 		cmd = exec.Command("xclip", "-selection", "clipboard", "-o")
 	case "windows":
 		cmd = exec.Command("powershell.exe", "-command", "Get-Clipboard")
