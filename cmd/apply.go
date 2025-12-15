@@ -7,8 +7,8 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/spf13/cobra"
 	"github.com/tuannvm/mcpenetes/internal/config"
+	"github.com/tuannvm/mcpenetes/internal/core"
 	"github.com/tuannvm/mcpenetes/internal/log"
-	"github.com/tuannvm/mcpenetes/internal/translator"
 	"github.com/tuannvm/mcpenetes/internal/util"
 )
 
@@ -20,11 +20,7 @@ var applyCmd = &cobra.Command{
 
 1. Loading MCP server configurations from mcp.json
 2. Automatically detecting installed MCP-compatible clients
-3. Converting the configuration to formats compatible with each client:
-   - Claude Desktop
-   - Windsurf
-   - Cursor
-   - Visual Studio Code
+3. Converting the configuration to formats compatible with each client
 4. Backing up existing configuration files before overwriting
 5. Writing the new converted configuration for each client
 
@@ -143,62 +139,36 @@ This command requires confirmation before proceeding.`,
 			return
 		}
 
-		// Create Translator
-		trans := translator.NewTranslator(cfg, mcpCfg)
+		// Create Manager
+		manager := core.NewManager(cfg, mcpCfg)
 
 		// Process all clients and all servers
 		log.Info("Processing clients and servers...")
 		clientSuccessCount := 0
 		clientFailureCount := 0
-		totalOperations := 0
 
 		// For each selected client
 		for clientName, clientConf := range selectedClientMap {
 			log.Printf(log.InfoColor, "- Processing client: %s\n", clientName)
 
-			// Backup client config once before making any changes
-			backupPath, err := trans.BackupClientConfig(clientName, clientConf)
-			if err != nil {
-				log.Error("  Error backing up config for %s: %v", clientName, err)
-				clientFailureCount++
-				continue // Skip this client if backup failed
-			}
-			log.Success("  Created backup at: %s", backupPath)
-
-			clientSuccess := true
-
-			// Apply each server configuration to this client
-			for serverName, serverConf := range mcpCfg.MCPServers {
-				log.Printf(log.InfoColor, "  - Applying server: %s\n", serverName)
-
-				// Translate and Apply
-				err = trans.TranslateAndApply(clientName, clientConf, serverConf)
-				if err != nil {
-					log.Error("    Error applying server %s to client %s: %v", serverName, clientName, err)
-					clientSuccess = false
-				} else {
-					log.Success("    Successfully applied server %s to client %s", serverName, clientName)
-					totalOperations++
+			res := manager.ApplyToClient(clientName, clientConf)
+			if res.Success {
+				log.Success("  Successfully applied configuration to %s", clientName)
+				if res.BackupPath != "" {
+					log.Info("  Backup created at: %s", res.BackupPath)
 				}
-			}
-
-			// Remove servers that no longer exist in the MCP configuration
-			log.Printf(log.InfoColor, "  - Checking for obsolete servers\n")
-			err = trans.RemoveClientServers(clientName, clientConf)
-			if err != nil {
-				log.Error("    Error removing obsolete servers from client %s: %v", clientName, err)
-				clientSuccess = false
-			}
-
-			if clientSuccess {
 				clientSuccessCount++
 			} else {
+				log.Error("  Failed to apply to %s: %v", clientName, res.Error)
+				if res.BackupPath != "" {
+					log.Info("  Partial backup created at: %s", res.BackupPath)
+				}
 				clientFailureCount++
 			}
 		}
 
 		log.Info("\nApply operation finished.")
-		log.Success("Successfully applied %d server configurations across %d clients.", totalOperations, clientSuccessCount)
+		log.Success("Successfully processed %d clients.", clientSuccessCount)
 		if clientFailureCount > 0 {
 			log.Error("Failed to apply to %d clients.", clientFailureCount)
 			os.Exit(1) // Exit with error if any client failed
