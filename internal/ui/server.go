@@ -12,6 +12,7 @@ import (
 	"github.com/tuannvm/mcpenetes/internal/core"
 	"github.com/tuannvm/mcpenetes/internal/log"
 	"github.com/tuannvm/mcpenetes/internal/registry"
+	"github.com/tuannvm/mcpenetes/internal/search"
 	"github.com/tuannvm/mcpenetes/internal/util"
 )
 
@@ -45,6 +46,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/data", s.handleGetData)
 	mux.HandleFunc("/api/apply", s.handleApply)
 	mux.HandleFunc("/api/search", s.handleSearch)
+	mux.HandleFunc("/api/install", s.handleInstall)
+	mux.HandleFunc("/api/server/update", s.handleUpdateServer) // New endpoint
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -60,6 +63,15 @@ type ConfigDataResponse struct {
 
 type ApplyRequest struct {
 	ClientNames []string `json:"clients"`
+}
+
+type InstallRequest struct {
+	ServerID string `json:"serverId"`
+}
+
+type UpdateServerRequest struct {
+	ServerID string           `json:"serverId"`
+	Config   config.MCPServer `json:"config"`
 }
 
 type ApplyResponse struct {
@@ -207,10 +219,82 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if query == "" {
 		filtered = allServers
 	} else {
-		// Basic filter logic could go here
-		filtered = allServers
+		// Basic filter logic
+		for _, s := range allServers {
+			// Naive case-insensitive contains would be better, but this is a start
+			if util.CaseInsensitiveContains(s.Name, query) || util.CaseInsensitiveContains(s.Description, query) {
+				filtered = append(filtered, s)
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(filtered)
+}
+
+func (s *Server) handleInstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req InstallRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ServerID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// For now, we don't have the full server data here unless we fetch again or cache it in memory.
+	// Since search.AddServerToMCPConfig takes *registry.ServerData (optional), we can pass nil
+	// or fetch it if needed. For the npx fallback, it doesn't strictly need it.
+	// Let's pass nil for now.
+
+	err := search.AddServerToMCPConfig(req.ServerID, nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to install server: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Server added to configuration"})
+}
+
+func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req UpdateServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ServerID == "" {
+		http.Error(w, "Server ID is required", http.StatusBadRequest)
+		return
+	}
+
+	mcpCfg, err := config.LoadMCPConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading MCP config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Update the configuration
+	mcpCfg.MCPServers[req.ServerID] = req.Config
+
+	if err := config.SaveMCPConfig(mcpCfg); err != nil {
+		http.Error(w, fmt.Sprintf("Error saving MCP config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Server configuration updated"})
 }

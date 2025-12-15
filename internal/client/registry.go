@@ -142,6 +142,38 @@ var Registry = []ClientDefinition{
 			},
 		},
 	},
+	{
+		ID:           "trae",
+		Name:         "Trae",
+		ConfigFormat: FormatSimpleJSON, // Assuming standard format, need to verify docs/user info if available
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Trae", "User", "globalStorage", "mcp.json")}, // Guess based on Electron/VSCode forks
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Trae", "User", "globalStorage", "mcp.json")}, // Guess
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Trae", "User", "globalStorage", "mcp.json")}, // Guess
+			},
+		},
+	},
+	{
+		ID:           "jetbrains-junie",
+		Name:         "JetBrains (Junie)",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".junie", "mcp", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseHome, Path: filepath.Join(".junie", "mcp", "mcp.json")}, // Note: Docs say ~/.junie even on Windows, need to verify if it respects %USERPROFILE% (which BaseHome maps to on detection)
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".junie", "mcp", "mcp.json")},
+			},
+		},
+	},
 
 	// --- VSCode Extensions / "Autonomous Agents" ---
 	{
@@ -241,6 +273,70 @@ var Registry = []ClientDefinition{
 			},
 			"linux": {
 				{Base: BaseHome, Path: filepath.Join(".vibe", "config.toml")},
+			},
+		},
+	},
+	{
+		ID:           "code-cli",
+		Name:         "Code CLI (Codex)",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".config", "code-cli", "mcp.json")}, // Guess based on convention
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("code-cli", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "code-cli", "mcp.json")},
+			},
+		},
+	},
+	{
+		ID:           "grok-cli",
+		Name:         "Grok CLI",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".grok", "config.json")}, // Typical CLI convention
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".grok", "config.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".grok", "config.json")},
+			},
+		},
+	},
+	{
+		ID:           "open-interpreter",
+		Name:         "Open Interpreter",
+		ConfigFormat: FormatYAML, // Often uses YAML for profiles
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".config", "open-interpreter", "config.yaml")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Open Interpreter", "config.yaml")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "open-interpreter", "config.yaml")},
+			},
+		},
+	},
+	{
+		ID:           "factory-cli",
+		Name:         "Factory CLI",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".factory", "config.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".factory", "config.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".factory", "config.json")},
 			},
 		},
 	},
