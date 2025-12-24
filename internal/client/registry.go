@@ -513,6 +513,22 @@ var Registry = []ClientDefinition{
 		},
 	},
 	{
+		ID:           "kiro",
+		Name:         "Kiro",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".kiro", "settings", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".kiro", "settings", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".kiro", "settings", "mcp.json")},
+			},
+		},
+	},
+	{
 		ID:           "jan",
 		Name:         "Jan",
 		ConfigFormat: FormatSimpleJSON, // Guessing simple JSON for now, might be in assistant.json or settings.json

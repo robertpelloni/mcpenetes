@@ -68,6 +68,7 @@ The following clients are currently supported in `internal/client/registry.go`:
 | `void` | Void | VSCode-JSON | VS Code Fork |
 | `melty` | Melty | VSCode-JSON | VS Code Fork |
 | `codebuddy` | CodeBuddy | VSCode-JSON | VS Code Fork |
+| `kiro` | Kiro | JSON | |
 | `cody` | Cody (Sourcegraph) | VSCode-JSON | Targets `openctx.providers` |
 | `lm-studio` | LM Studio | JSON | |
 | `anythingllm` | AnythingLLM | JSON | |

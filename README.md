@@ -127,6 +127,7 @@ mcpenetes automatically detects and configures over 30 MCP-compatible clients, i
 *   **JetBrains IDEs** (IntelliJ, PyCharm, etc.) via Junie
 *   **Melty** (VS Code Fork)
 *   **CodeBuddy** (VS Code Fork)
+*   **Kiro**
 
 **Extensions:**
 *   **Cline**
