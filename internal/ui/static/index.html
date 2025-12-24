@@ -11,6 +11,7 @@
         .card { padding: 1rem; border: 1px solid var(--muted-border-color); border-radius: var(--border-radius); }
         .success { color: var(--ins-color); }
         .error { color: var(--del-color); }
+        .warning { color: var(--pico-color-amber-500); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         .modal { display: none; }
@@ -26,9 +27,17 @@
             <ul>
                 <li><a href="#" onclick="switchTab('dashboard')">Dashboard</a></li>
                 <li><a href="#" onclick="switchTab('search')">Search & Install</a></li>
-                <li><a href="#" onclick="loadData()">Refresh</a></li>
+                <li><a href="#" onclick="loadData(); checkDoctor();">Refresh</a></li>
             </ul>
         </nav>
+
+        <!-- Doctor Status Banner -->
+        <div id="doctorBanner" style="display:none; margin-bottom: 1rem; padding: 0.5rem; border-radius: var(--border-radius); background-color: var(--card-background-color); border: 1px solid var(--muted-border-color);">
+            <details>
+                <summary id="doctorSummary">System Status: Checking...</summary>
+                <ul id="doctorList" style="margin-top: 0.5rem;"></ul>
+            </details>
+        </div>
 
         <!-- Dashboard Tab -->
         <div id="dashboard" class="tab-content active">
@@ -123,6 +132,50 @@
             } catch (e) {
                 console.error(e);
                 document.getElementById('clientsList').innerHTML = `<span class="error">Error loading data: ${e}</span>`;
+            }
+        }
+
+        async function checkDoctor() {
+            try {
+                const res = await fetch('/api/doctor');
+                const results = await res.json();
+
+                const banner = document.getElementById('doctorBanner');
+                const summary = document.getElementById('doctorSummary');
+                const list = document.getElementById('doctorList');
+
+                banner.style.display = 'block';
+                list.innerHTML = '';
+
+                let errorCount = 0;
+                let warningCount = 0;
+
+                results.forEach(r => {
+                    let icon = '✅';
+                    let cls = 'success';
+                    if (r.status === 'error') {
+                        icon = '❌';
+                        cls = 'error';
+                        errorCount++;
+                    } else if (r.status === 'warning') {
+                        icon = '⚠️';
+                        cls = 'warning';
+                        warningCount++;
+                    }
+
+                    list.innerHTML += `<li class="${cls}">${icon} <strong>${r.name}</strong>: ${r.message}</li>`;
+                });
+
+                if (errorCount > 0) {
+                    summary.innerHTML = `System Status: <span class="error">❌ ${errorCount} Errors</span>, <span class="warning">${warningCount} Warnings</span>`;
+                } else if (warningCount > 0) {
+                    summary.innerHTML = `System Status: <span class="warning">⚠️ ${warningCount} Warnings</span>`;
+                } else {
+                    summary.innerHTML = `System Status: <span class="success">✅ All Systems Operational</span>`;
+                }
+
+            } catch (e) {
+                console.error("Doctor check failed", e);
             }
         }
 
@@ -362,6 +415,7 @@
 
         // Initial Load
         loadData();
+        checkDoctor(); // Load health status
     </script>
 </body>
 </html>

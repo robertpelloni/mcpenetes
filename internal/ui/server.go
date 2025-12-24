@@ -10,6 +10,7 @@ import (
 
 	"github.com/tuannvm/mcpenetes/internal/config"
 	"github.com/tuannvm/mcpenetes/internal/core"
+	"github.com/tuannvm/mcpenetes/internal/doctor"
 	"github.com/tuannvm/mcpenetes/internal/log"
 	"github.com/tuannvm/mcpenetes/internal/registry"
 	"github.com/tuannvm/mcpenetes/internal/search"
@@ -49,7 +50,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/search", s.handleSearch)
 	mux.HandleFunc("/api/install", s.handleInstall)
 	mux.HandleFunc("/api/server/update", s.handleUpdateServer)
-	mux.HandleFunc("/api/server/remove", s.handleRemoveServer) // New endpoint
+	mux.HandleFunc("/api/server/remove", s.handleRemoveServer)
+	mux.HandleFunc("/api/doctor", s.handleDoctor) // New endpoint
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -327,4 +329,10 @@ func (s *Server) handleRemoveServer(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Server removed from configuration"})
+}
+
+func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {
+	results := doctor.RunChecks()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
 }
