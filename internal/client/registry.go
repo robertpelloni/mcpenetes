@@ -166,6 +166,22 @@ var Registry = []ClientDefinition{
 		},
 	},
 	{
+		ID:           "amazon-q",
+		Name:         "Amazon Q (CodeWhisperer)",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".aws", "amazonq", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".aws", "amazonq", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".aws", "amazonq", "mcp.json")},
+			},
+		},
+	},
+	{
 		ID:           "jetbrains-junie",
 		Name:         "JetBrains (Junie)",
 		ConfigFormat: FormatSimpleJSON,
