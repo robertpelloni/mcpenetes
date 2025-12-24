@@ -444,6 +444,93 @@ var Registry = []ClientDefinition{
 			},
 		},
 	},
+	{
+		ID:           "melty",
+		Name:         "Melty",
+		ConfigFormat: FormatVSCode, // VSCode fork
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Melty", "User", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Melty", "User", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Melty", "User", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "codebuddy",
+		Name:         "CodeBuddy",
+		ConfigFormat: FormatVSCode, // VSCode fork/extension
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".codebuddy", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".codebuddy", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".codebuddy", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "jan",
+		Name:         "Jan",
+		ConfigFormat: FormatSimpleJSON, // Guessing simple JSON for now, might be in assistant.json or settings.json
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Jan", "data", "settings.json")},
+				{Base: BaseHome, Path: filepath.Join("jan", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Jan", "data", "settings.json")},
+				{Base: BaseUserProfile, Path: filepath.Join("jan", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Jan", "data", "settings.json")},
+				{Base: BaseHome, Path: filepath.Join("jan", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "warp",
+		Name:         "Warp",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".local", "state", "warp-terminal", "mcp")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".local", "state", "warp-terminal", "mcp")},
+				{Base: BaseAppData, Path: filepath.Join("Warp", "mcp.json")}, // Fallback guess
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".local", "state", "warp-terminal", "mcp")},
+			},
+		},
+	},
+	{
+		ID:           "llm-cli",
+		Name:         "LLM CLI (Simon Willison)",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".llm-tools-mcp", "mcp.json")},
+				{Base: BaseHome, Path: filepath.Join(".config", "io.datasette.llm", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".llm-tools-mcp", "mcp.json")},
+				{Base: BaseAppData, Path: filepath.Join("io.datasette.llm", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".llm-tools-mcp", "mcp.json")},
+				{Base: BaseHome, Path: filepath.Join(".config", "io.datasette.llm", "mcp.json")},
+			},
+		},
+	},
 }
 
 // DetectedClient represents a client found on the system
