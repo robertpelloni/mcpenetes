@@ -13,6 +13,7 @@ import (
 	"github.com/tuannvm/mcpenetes/internal/doctor"
 	"github.com/tuannvm/mcpenetes/internal/log"
 	"github.com/tuannvm/mcpenetes/internal/registry"
+	"github.com/tuannvm/mcpenetes/internal/registry/manager"
 	"github.com/tuannvm/mcpenetes/internal/search"
 	"github.com/tuannvm/mcpenetes/internal/util"
 	"github.com/tuannvm/mcpenetes/internal/version"
@@ -51,7 +52,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/install", s.handleInstall)
 	mux.HandleFunc("/api/server/update", s.handleUpdateServer)
 	mux.HandleFunc("/api/server/remove", s.handleRemoveServer)
-	mux.HandleFunc("/api/doctor", s.handleDoctor) // New endpoint
+	mux.HandleFunc("/api/doctor", s.handleDoctor)
+	mux.HandleFunc("/api/registry/add", s.handleAddRegistry)
+	mux.HandleFunc("/api/registry/remove", s.handleRemoveRegistry)
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -82,6 +85,15 @@ type UpdateServerRequest struct {
 
 type RemoveServerRequest struct {
 	ServerID string `json:"serverId"`
+}
+
+type AddRegistryRequest struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type RemoveRegistryRequest struct {
+	Name string `json:"name"`
 }
 
 type ApplyResponse struct {
@@ -335,4 +347,56 @@ func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {
 	results := doctor.RunChecks()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
+}
+
+func (s *Server) handleAddRegistry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req AddRegistryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" || req.URL == "" {
+		http.Error(w, "Name and URL are required", http.StatusBadRequest)
+		return
+	}
+
+	if err := manager.AddRegistry(req.Name, req.URL); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to add registry: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Registry added"})
+}
+
+func (s *Server) handleRemoveRegistry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RemoveRegistryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		http.Error(w, "Registry name is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := manager.RemoveRegistry(req.Name); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to remove registry: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Registry removed"})
 }

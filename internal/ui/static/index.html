@@ -27,6 +27,7 @@
             <ul>
                 <li><a href="#" onclick="switchTab('dashboard')">Dashboard</a></li>
                 <li><a href="#" onclick="switchTab('search')">Search & Install</a></li>
+                <li><a href="#" onclick="switchTab('registries')">Registries</a></li>
                 <li><a href="#" onclick="loadData(); checkDoctor();">Refresh</a></li>
             </ul>
         </nav>
@@ -86,6 +87,23 @@
                 <div id="searchResults" class="card"></div>
             </section>
         </div>
+
+        <!-- Registries Tab -->
+        <div id="registries" class="tab-content">
+            <section>
+                <h3>Configured Registries</h3>
+                <div class="card">
+                    <div id="registriesList">Loading...</div>
+                </div>
+                <hr>
+                <h4>Add Registry</h4>
+                <div class="grid">
+                    <div><input type="text" id="newRegName" placeholder="Name (e.g. My Registry)"></div>
+                    <div><input type="url" id="newRegUrl" placeholder="URL (e.g. https://...)"></div>
+                    <div><button onclick="addRegistry()">Add</button></div>
+                </div>
+            </section>
+        </div>
     </main>
 
     <!-- Edit/Install Server Modal -->
@@ -129,6 +147,7 @@
 
                 renderClients();
                 renderServers();
+                renderRegistries();
             } catch (e) {
                 console.error(e);
                 document.getElementById('clientsList').innerHTML = `<span class="error">Error loading data: ${e}</span>`;
@@ -223,6 +242,77 @@
             }
             html += '</ul>';
             list.innerHTML = html;
+        }
+
+        function renderRegistries() {
+            const list = document.getElementById('registriesList');
+            if (!configData.registries || configData.registries.length === 0) {
+                list.innerHTML = "No registries configured.";
+                return;
+            }
+
+            let html = '<ul>';
+            configData.registries.forEach(reg => {
+                html += `
+                    <li style="margin-bottom: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div><strong>${reg.name}</strong>: ${reg.url}</div>
+                            <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="removeRegistry('${reg.name}')">Remove</button>
+                        </div>
+                    </li>`;
+            });
+            html += '</ul>';
+            list.innerHTML = html;
+        }
+
+        async function addRegistry() {
+            const name = document.getElementById('newRegName').value;
+            const url = document.getElementById('newRegUrl').value;
+
+            if (!name || !url) {
+                alert("Name and URL are required");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/registry/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, url})
+                });
+
+                if (res.ok) {
+                    document.getElementById('newRegName').value = '';
+                    document.getElementById('newRegUrl').value = '';
+                    loadData();
+                } else {
+                    const err = await res.text();
+                    alert("Failed to add registry: " + err);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        async function removeRegistry(name) {
+            if (!confirm(`Remove registry '${name}'?`)) return;
+
+            try {
+                const res = await fetch('/api/registry/remove', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name})
+                });
+
+                if (res.ok) {
+                    loadData();
+                } else {
+                    const err = await res.text();
+                    alert("Failed to remove registry: " + err);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
         }
 
         function openEditModal(serverID) {
