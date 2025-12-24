@@ -21,6 +21,8 @@ type Client struct {
 	// Type/Format of the client config, used for translation
 	// If empty, defaults will be inferred
 	Type string `yaml:"type,omitempty"`
+	// Key overrides the default JSON key if set (e.g. "openctx.providers")
+	Key string `yaml:"key,omitempty"`
 }
 
 // BackupConfig defines backup settings

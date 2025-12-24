@@ -159,7 +159,6 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	manager := core.NewManager(cfg, mcpCfg)
 	var results []core.ApplyResult
 	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	// If no clients specified, apply to all in config
 	targetClients := req.ClientNames
@@ -169,23 +168,42 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Group clients by config path to avoid race conditions
+	// Map: expandedConfigPath -> []ClientInfo
+	type ClientInfo struct {
+		Name   string
+		Config config.Client
+	}
+	groupedClients := make(map[string][]ClientInfo)
+
 	for _, name := range targetClients {
 		clientConf, ok := cfg.Clients[name]
 		if !ok {
 			continue
 		}
 
-		wg.Add(1)
-		go func(n string, c config.Client) {
-			defer wg.Done()
-			res := manager.ApplyToClient(n, c)
+		expandedPath, err := util.ExpandPath(clientConf.ConfigPath)
+		if err != nil {
+			// If expansion fails, just use original path as key (unlikely to collide if invalid)
+			expandedPath = clientConf.ConfigPath
+		}
+
+		groupedClients[expandedPath] = append(groupedClients[expandedPath], ClientInfo{Name: name, Config: clientConf})
+	}
+
+	// Process each file group sequentially to prevent race conditions on the same file
+	// We can still process different files concurrently if we wanted,
+	// but for safety and simplicity, we'll do everything sequentially in this iteration.
+	// If performance becomes an issue, we can parallelize the outer loop over `groupedClients`.
+
+	for _, clientList := range groupedClients {
+		for _, clientInfo := range clientList {
+			res := manager.ApplyToClient(clientInfo.Name, clientInfo.Config)
 			mu.Lock()
 			results = append(results, res)
 			mu.Unlock()
-		}(name, clientConf)
+		}
 	}
-
-	wg.Wait()
 
 	type JSONResult struct {
 		ClientName string `json:"clientName"`

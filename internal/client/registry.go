@@ -41,6 +41,9 @@ type ClientDefinition struct {
 	ID           string
 	Name         string
 	ConfigFormat ConfigFormatEnum
+	// ConfigKey is an optional field to override the default JSON key
+	// e.g. "openctx.providers" instead of "mcp.servers" for VSCode format
+	ConfigKey string
 	// Map of OS to list of potential config paths
 	// supported OS keys: "windows", "darwin", "linux"
 	Paths map[string][]PathDefinition
@@ -180,6 +183,23 @@ var Registry = []ClientDefinition{
 	},
 
 	// --- VSCode Extensions / "Autonomous Agents" ---
+	{
+		ID:           "cody",
+		Name:         "Cody (Sourcegraph)",
+		ConfigFormat: FormatVSCode,
+		ConfigKey:    "openctx.providers",
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Code", "User", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Code", "User", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Code", "User", "settings.json")},
+			},
+		},
+	},
 	{
 		ID:           "cline",
 		Name:         "Cline",
@@ -569,6 +589,7 @@ type DetectedClient struct {
 	Name         string
 	ConfigPath   string
 	ConfigFormat ConfigFormatEnum
+	ConfigKey    string
 }
 
 // UserRegistryFile is the path to the user-defined registry file
@@ -638,6 +659,7 @@ func DetectClients() (map[string]DetectedClient, error) {
 					Name:         def.Name,
 					ConfigPath:   fullPath,
 					ConfigFormat: def.ConfigFormat,
+					ConfigKey:    def.ConfigKey,
 				}
 				break // Found valid config file
 			}
@@ -651,6 +673,7 @@ func DetectClients() (map[string]DetectedClient, error) {
 					Name:         def.Name,
 					ConfigPath:   fullPath,
 					ConfigFormat: def.ConfigFormat,
+					ConfigKey:    def.ConfigKey,
 				}
 				break
 			}
