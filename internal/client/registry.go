@@ -531,6 +531,36 @@ var Registry = []ClientDefinition{
 			},
 		},
 	},
+	{
+		ID:           "claude-code",
+		Name:         "Claude Code CLI",
+		ConfigFormat: FormatSimpleJSON, // ~/.claude.json uses {"mcpServers": ...}
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".claude.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".claude.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".claude.json")},
+			},
+		},
+	},
+	{
+		ID:           "boltai",
+		Name:         "BoltAI",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "BoltAI", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("BoltAI", "mcp.json")}, // Standard assumption for Electron/similar apps
+			},
+			// Linux support for BoltAI unknown/unlikely
+		},
+	},
 }
 
 // DetectedClient represents a client found on the system
