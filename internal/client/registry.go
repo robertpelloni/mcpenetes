@@ -529,6 +529,38 @@ var Registry = []ClientDefinition{
 		},
 	},
 	{
+		ID:           "codegpt",
+		Name:         "CodeGPT",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Code", "User", "globalStorage", "DanielSanMedium.dscodegpt", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Code", "User", "globalStorage", "DanielSanMedium.dscodegpt", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Code", "User", "globalStorage", "DanielSanMedium.dscodegpt", "mcp.json")},
+			},
+		},
+	},
+	{
+		ID:           "5ire",
+		Name:         "5ire",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "5ire", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("5ire", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "5ire", "mcp.json")},
+			},
+		},
+	},
+	{
 		ID:           "jan",
 		Name:         "Jan",
 		ConfigFormat: FormatSimpleJSON, // Guessing simple JSON for now, might be in assistant.json or settings.json

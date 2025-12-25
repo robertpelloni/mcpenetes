@@ -130,6 +130,7 @@ mcpenetes automatically detects and configures over 30 MCP-compatible clients, i
 *   **Kiro**
 
 **Extensions:**
+*   **CodeGPT**
 *   **Cline**
 *   **Roo Code**
 *   **Continue**
@@ -143,6 +144,7 @@ mcpenetes automatically detects and configures over 30 MCP-compatible clients, i
 *   LibreChat
 *   Jan
 *   BoltAI
+*   **5ire**
 
 **CLIs & Terminals:**
 *   **Amazon Q (CodeWhisperer)**
