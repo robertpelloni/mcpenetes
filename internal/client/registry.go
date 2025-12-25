@@ -529,6 +529,22 @@ var Registry = []ClientDefinition{
 		},
 	},
 	{
+		ID:           "antigravity",
+		Name:         "Antigravity IDE",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".gemini", "antigravity", "mcp_config.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".gemini", "antigravity", "mcp_config.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".gemini", "antigravity", "mcp_config.json")},
+			},
+		},
+	},
+	{
 		ID:           "codegpt",
 		Name:         "CodeGPT",
 		ConfigFormat: FormatSimpleJSON,

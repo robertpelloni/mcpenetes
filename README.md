@@ -128,6 +128,7 @@ mcpenetes automatically detects and configures over 30 MCP-compatible clients, i
 *   **Melty** (VS Code Fork)
 *   **CodeBuddy** (VS Code Fork)
 *   **Kiro**
+*   **Antigravity IDE**
 
 **Extensions:**
 *   **CodeGPT**
