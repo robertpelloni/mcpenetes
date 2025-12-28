@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/tailscale/hujson"
+	"github.com/tuannvm/mcpenetes/internal/client"
 	"github.com/tuannvm/mcpenetes/internal/config"
 	"github.com/tuannvm/mcpenetes/internal/util"
 	"gopkg.in/yaml.v3"
@@ -136,32 +138,68 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 		}
 	}
 
-	// Determine how to format the config based on client name and file extension
 	var outputData []byte
-	format := strings.ToLower(filepath.Ext(clientConfigPath))
+	formatType := client.ConfigFormatEnum(clientConf.Type)
 
-	// Check if the file already exists to determine if we need to merge with existing config
-	existingConfig := make(map[string]interface{})
-	existingFile, err := os.ReadFile(clientConfigPath)
-	var configExists = false
-	if err == nil && len(existingFile) > 0 {
-		configExists = true
-		err = json.Unmarshal(existingFile, &existingConfig)
-		if err != nil {
-			// File exists but isn't valid JSON, we'll just overwrite it
-			configExists = false
+	// Determine format type if not explicitly set
+	if formatType == "" {
+		ext := strings.ToLower(filepath.Ext(clientConfigPath))
+		switch ext {
+		case ".json":
+			// Try to guess from client name or default to simple json
+			if strings.Contains(clientName, "claude-desktop") {
+				formatType = client.FormatClaudeDesktop
+			} else if strings.Contains(clientName, "vscode") {
+				formatType = client.FormatVSCode
+			} else if strings.Contains(strings.ToLower(clientName), "continue") {
+				formatType = client.FormatContinue
+			} else {
+				formatType = client.FormatSimpleJSON
+			}
+		case ".yaml", ".yml":
+			formatType = client.FormatYAML
+		case ".toml":
+			formatType = client.FormatTOML
+		default:
+			return fmt.Errorf("unknown config format for client %s", clientName)
 		}
 	}
 
+	// Helper function to read and parse JSON/JSONC safely
+	parseJSONSafe := func(path string, v interface{}) error {
+		data, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			return nil // OK, just empty
+		}
+		if err != nil {
+			return err
+		}
+		if len(data) == 0 {
+			return nil
+		}
+
+		// Use hujson to standardize JSONC (comments, trailing commas) to standard JSON
+		standardized, err := hujson.Standardize(data)
+		if err != nil {
+			// If we can't standardize it, it's likely invalid JSON/JSONC
+			// To be safe, we abort to avoid overwriting a file we can't understand
+			return fmt.Errorf("failed to parse existing config file (invalid JSON/JSONC): %w", err)
+		}
+
+		return json.Unmarshal(standardized, v)
+	}
+
 	// Prepare the server configuration based on client type
-	switch {
-	case strings.Contains(clientName, "claude-desktop"):
-		// Format expected by Claude Desktop: {"mcpServers": {"server-id": {...server config...}}}
+	switch formatType {
+	case client.FormatClaudeDesktop:
+		// Format: {"mcpServers": {"server-id": {...server config...}}}
 		var claudeConfig map[string]interface{}
 
-		if configExists {
-			claudeConfig = existingConfig
-		} else {
+		if err := parseJSONSafe(clientConfigPath, &claudeConfig); err != nil {
+			return err
+		}
+
+		if claudeConfig == nil {
 			claudeConfig = make(map[string]interface{})
 			claudeConfig["mcpServers"] = make(map[string]interface{})
 		}
@@ -173,246 +211,274 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 			mcpServers = make(map[string]interface{})
 		}
 
-		// Create a server entry for Claude Desktop format
-		serverEntry := make(map[string]interface{})
-
-		// Copy the basic server properties
-		if serverConf.Command != "" {
-			serverEntry["command"] = serverConf.Command
-		}
-
-		if len(serverConf.Args) > 0 {
-			serverEntry["args"] = serverConf.Args
-		}
-
-		if len(serverConf.Env) > 0 {
-			serverEntry["env"] = serverConf.Env
-		}
-
-		if serverConf.URL != "" {
-			serverEntry["url"] = serverConf.URL
-		}
-
-		// Include disabled and autoApprove fields if they're set
-		if serverConf.Disabled {
-			serverEntry["disabled"] = serverConf.Disabled
-		}
-
-		if len(serverConf.AutoApprove) > 0 {
-			serverEntry["autoApprove"] = serverConf.AutoApprove
-		} else {
-			serverEntry["autoApprove"] = []string{}
-		}
-
-		// Add/update the server in the map
+		serverEntry := t.createServerMap(serverConf)
 		mcpServers[serverID] = serverEntry
 		claudeConfig["mcpServers"] = mcpServers
 
-		// Marshal the updated config
 		outputData, err = json.MarshalIndent(claudeConfig, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal Claude Desktop config: %w", err)
 		}
 
-	case strings.Contains(clientName, "windsurf") || strings.Contains(clientName, "cursor"):
-		// Format expected by Windsurf and Cursor: using mcpServers at the top level
-		var windsurfConfig map[string]interface{}
+	case client.FormatSimpleJSON:
+		// Format: {"mcpServers": {"server-id": {...}}} (Used by Cursor, Windsurf, Cline, etc.)
+		var configMap map[string]interface{}
 
-		if configExists {
-			windsurfConfig = existingConfig
-		} else {
-			windsurfConfig = make(map[string]interface{})
+		if err := parseJSONSafe(clientConfigPath, &configMap); err != nil {
+			return err
 		}
 
-		// For Windsurf, we'll use the mcpServers key at the top level
-		if _, ok := windsurfConfig["mcpServers"]; !ok {
-			windsurfConfig["mcpServers"] = make(map[string]interface{})
+		if configMap == nil {
+			configMap = make(map[string]interface{})
 		}
 
-		mcpServers, ok := windsurfConfig["mcpServers"].(map[string]interface{})
+		// Ensure mcpServers exists
+		if _, ok := configMap["mcpServers"]; !ok {
+			configMap["mcpServers"] = make(map[string]interface{})
+		}
+
+		mcpServers, ok := configMap["mcpServers"].(map[string]interface{})
 		if !ok {
-			// If the mcpServers key exists but is not a map, create a new one
 			mcpServers = make(map[string]interface{})
 		}
 
-		// Create or update server entry
-		serverEntry := make(map[string]interface{})
-
-		if serverConf.Command != "" {
-			serverEntry["command"] = serverConf.Command
-		}
-
-		if len(serverConf.Args) > 0 {
-			serverEntry["args"] = serverConf.Args
-		}
-
-		if len(serverConf.Env) > 0 {
-			serverEntry["env"] = serverConf.Env
-		}
-
-		if serverConf.URL != "" {
-			serverEntry["url"] = serverConf.URL
-		}
-
-		// Add/update the server in the map
+		serverEntry := t.createServerMap(serverConf)
 		mcpServers[serverID] = serverEntry
-		windsurfConfig["mcpServers"] = mcpServers
+		configMap["mcpServers"] = mcpServers
 
-		// Marshal the updated config
-		outputData, err = json.MarshalIndent(windsurfConfig, "", "  ")
+		outputData, err = json.MarshalIndent(configMap, "", "  ")
 		if err != nil {
-			return fmt.Errorf("failed to marshal Windsurf config: %w", err)
+			return fmt.Errorf("failed to marshal JSON config: %w", err)
 		}
 
-	case strings.Contains(clientName, "vscode"):
-		// VS Code format for MCP servers
+	case client.FormatVSCode:
+		// Format: {"mcp": {"servers": {"server-id": {...}}}}
+		// OR custom key if clientConf.Key is set
 		var vscodeConfig map[string]interface{}
 
-		if configExists {
-			vscodeConfig = existingConfig
-		} else {
+		if err := parseJSONSafe(clientConfigPath, &vscodeConfig); err != nil {
+			return err
+		}
+
+		if vscodeConfig == nil {
 			vscodeConfig = make(map[string]interface{})
 		}
 
-		// Get or create the mcp object
-		var mcpObj map[string]interface{}
-		existingMcpObj, mcpExists := vscodeConfig["mcp"].(map[string]interface{})
+		// Determine the root key path
+		// Default is "mcp.servers" (nested as "mcp": {"servers": ...})
+		// If clientConf.Key is set (e.g. "openctx.providers"), use that.
 
-		if mcpExists {
-			mcpObj = existingMcpObj
-		} else {
-			mcpObj = make(map[string]interface{})
-			// Initialize inputs as empty array if it doesn't exist
-			mcpObj["inputs"] = []interface{}{}
-		}
+		// For now, supporting specific cases based on key structure
+		if clientConf.Key == "openctx.providers" {
+			// Special handling for OpenCtx providers structure
+			// "openctx.providers": { "https://...": { "mcp.provider.uri": "file:///..." } }
+			// NOTE: This currently only supports the 'modelcontextprotocol' provider type from OpenCtx
+			// and assumes we are configuring it to point to a local file/command?
+			// Actually, OpenCtx MCP provider usually takes a URL or command.
+			// Given the complexity of OpenCtx generic provider, we'll try to map standard MCP config to it if possible,
+			// or simply inject it as a raw object if the user knows what they are doing.
 
-		// Get or create the servers object within mcp
-		var mcpServers map[string]interface{}
-		existingServers, serversExist := mcpObj["servers"].(map[string]interface{})
+			// For simplicity in this iteration, we will treat it as a map where we inject the server config
+			// BUT OpenCtx providers usually expect a specific schema.
+			// Let's assume for Cody we are injecting into "openctx.providers".
+			// However, Cody/OpenCtx usually expects a map of Provider URLs to Config.
 
-		if serversExist {
-			mcpServers = existingServers
-		} else {
-			mcpServers = make(map[string]interface{})
-		}
+			// If we are just injecting a standard MCP server list, this might not work directly with OpenCtx
+			// unless we are configuring the "mcp" provider specifically.
 
-		// Create or update the server config
-		serverEntry := make(map[string]interface{})
-
-		if serverConf.Command != "" {
-			serverEntry["command"] = serverConf.Command
-		}
-
-		if len(serverConf.Args) > 0 {
-			serverEntry["args"] = serverConf.Args
-		}
-
-		// VSCode format includes env vars
-		if len(serverConf.Env) > 0 {
-			serverEntry["env"] = serverConf.Env
-		} else {
-			// Ensure env is included even if empty
-			serverEntry["env"] = make(map[string]string)
-		}
-
-		if serverConf.URL != "" {
-			serverEntry["url"] = serverConf.URL
-		}
-
-		// Add/update the server in the map
-		mcpServers[serverID] = serverEntry
-		mcpObj["servers"] = mcpServers
-		vscodeConfig["mcp"] = mcpObj
-
-		// Marshal the updated config
-		outputData, err = json.MarshalIndent(vscodeConfig, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal VS Code/Cursor config: %w", err)
-		}
-
-	default:
-		// For unknown clients, use a generic approach based on file extension
-		switch format {
-		case ".json":
-			// If we don't know the client, use a standard format that matches our internal structure
-			// Our standard format uses mcpServers map like our current config
-			var genericConfig map[string]interface{}
-
-			if configExists {
-				genericConfig = existingConfig
+			// Fallback: If the user explicitly requested this format, we try to inject it as a key.
+			var providers map[string]interface{}
+			if existing, ok := vscodeConfig["openctx.providers"].(map[string]interface{}); ok {
+				providers = existing
 			} else {
-				genericConfig = make(map[string]interface{})
+				providers = make(map[string]interface{})
 			}
 
-			// Get or create the mcpServers map
-			mcpServers, ok := genericConfig["mcpServers"].(map[string]interface{})
-			if !ok {
+			// We can't easily map a list of MCP servers to OpenCtx providers list without a specific adapter.
+			// But if the requirement is just to support the key:
+			// We will inject the server config under the serverID key in that map.
+			serverEntry := t.createServerMap(serverConf)
+			providers[serverID] = serverEntry
+			vscodeConfig["openctx.providers"] = providers
+
+		} else {
+			// Standard VSCode MCP "mcp.servers" logic
+			// Get or create mcp object
+			var mcpObj map[string]interface{}
+			if existingMcpObj, ok := vscodeConfig["mcp"].(map[string]interface{}); ok {
+				mcpObj = existingMcpObj
+			} else {
+				mcpObj = make(map[string]interface{})
+			}
+
+			// Get or create servers object
+			var mcpServers map[string]interface{}
+			if existingServers, ok := mcpObj["servers"].(map[string]interface{}); ok {
+				mcpServers = existingServers
+			} else {
 				mcpServers = make(map[string]interface{})
 			}
 
-			// Convert serverConf to a map to add to mcpServers
-			serverMap := make(map[string]interface{})
-
-			if serverConf.Command != "" {
-				serverMap["command"] = serverConf.Command
+			serverEntry := t.createServerMap(serverConf)
+			// VSCode format explicitly needs env even if empty, usually
+			if _, ok := serverEntry["env"]; !ok {
+				serverEntry["env"] = make(map[string]string)
 			}
 
-			if len(serverConf.Args) > 0 {
-				serverMap["args"] = serverConf.Args
-			}
-
-			if len(serverConf.Env) > 0 {
-				serverMap["env"] = serverConf.Env
-			}
-
-			if serverConf.URL != "" {
-				serverMap["url"] = serverConf.URL
-			}
-
-			// Add disabled and autoApprove fields if they're set
-			if serverConf.Disabled {
-				serverMap["disabled"] = serverConf.Disabled
-			}
-
-			if len(serverConf.AutoApprove) > 0 {
-				serverMap["autoApprove"] = serverConf.AutoApprove
-			} else {
-				serverMap["autoApprove"] = []string{}
-			}
-
-			// Add the server to the map
-			mcpServers[serverID] = serverMap
-			genericConfig["mcpServers"] = mcpServers
-
-			outputData, err = json.MarshalIndent(genericConfig, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal generic JSON config: %w", err)
-			}
-
-		case ".yaml", ".yml":
-			// Create a map for the server with its ID as key
-			serverMap := make(map[string]config.MCPServer)
-			serverMap[serverID] = serverConf
-
-			outputData, err = yaml.Marshal(serverMap)
-			if err != nil {
-				return fmt.Errorf("failed to marshal config to YAML for %s: %w", clientName, err)
-			}
-
-		case ".toml":
-			// Create a map for the server with its ID as key
-			serverMap := make(map[string]config.MCPServer)
-			serverMap[serverID] = serverConf
-
-			buf := new(bytes.Buffer)
-			if err := toml.NewEncoder(buf).Encode(serverMap); err != nil {
-				return fmt.Errorf("failed to marshal config to TOML for %s: %w", clientName, err)
-			}
-			outputData = buf.Bytes()
-
-		default:
-			return fmt.Errorf("unsupported config format '%s' for client %s", format, clientName)
+			mcpServers[serverID] = serverEntry
+			mcpObj["servers"] = mcpServers
+			vscodeConfig["mcp"] = mcpObj
 		}
+
+		outputData, err = json.MarshalIndent(vscodeConfig, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal VS Code config: %w", err)
+		}
+
+	case client.FormatContinue:
+		// Continue uses nested structure:
+		// "experimental": { "modelContextProtocolServers": [ { "name": "...", "transport": { ... } } ] }
+		var continueConfig map[string]interface{}
+		if err := parseJSONSafe(clientConfigPath, &continueConfig); err != nil {
+			return err
+		}
+		if continueConfig == nil {
+			continueConfig = make(map[string]interface{})
+		}
+
+		// Ensure experimental object exists
+		if _, ok := continueConfig["experimental"]; !ok {
+			continueConfig["experimental"] = make(map[string]interface{})
+		}
+		experimental := continueConfig["experimental"].(map[string]interface{})
+
+		// Ensure modelContextProtocolServers list exists
+		if _, ok := experimental["modelContextProtocolServers"]; !ok {
+			experimental["modelContextProtocolServers"] = []interface{}{}
+		}
+
+		// Convert existing list to a map for easy updating
+		serversList, ok := experimental["modelContextProtocolServers"].([]interface{})
+		if !ok {
+			// If it's not a list, maybe reset it?
+			serversList = []interface{}{}
+		}
+
+		// Check if server already exists in list and update it, or append
+		found := false
+		newServerEntry := map[string]interface{}{
+			"name": serverID,
+			"transport": map[string]interface{}{
+				"type": "stdio", // Defaulting to stdio, check logic if http/sse is needed
+				"command": serverConf.Command,
+				"args": serverConf.Args,
+				"env": serverConf.Env,
+			},
+		}
+
+		if serverConf.URL != "" {
+			// Handle HTTP/SSE transport mapping if applicable
+			// Continue supports "type": "sse" with "url"
+			// Assuming "url" implies SSE or HTTP
+			newServerEntry["transport"] = map[string]interface{}{
+				"type": "sse", // Simplification
+				"url": serverConf.URL,
+			}
+		}
+
+		updatedList := []interface{}{}
+		for _, s := range serversList {
+			sMap, ok := s.(map[string]interface{})
+			if !ok { continue }
+			if name, ok := sMap["name"].(string); ok && name == serverID {
+				updatedList = append(updatedList, newServerEntry)
+				found = true
+			} else {
+				updatedList = append(updatedList, s)
+			}
+		}
+
+		if !found {
+			updatedList = append(updatedList, newServerEntry)
+		}
+
+		experimental["modelContextProtocolServers"] = updatedList
+		continueConfig["experimental"] = experimental
+
+		outputData, err = json.MarshalIndent(continueConfig, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal Continue config: %w", err)
+		}
+
+	case client.FormatYAML:
+		var yamlConfig map[string]interface{}
+
+		existingFile, err := os.ReadFile(clientConfigPath)
+		if err == nil && len(existingFile) > 0 {
+			if err := yaml.Unmarshal(existingFile, &yamlConfig); err != nil {
+				// Abort on invalid YAML
+				return fmt.Errorf("failed to parse existing YAML config: %w", err)
+			}
+		}
+
+		if yamlConfig == nil {
+			yamlConfig = make(map[string]interface{})
+		}
+
+		if _, ok := yamlConfig["mcpServers"]; !ok {
+			yamlConfig["mcpServers"] = make(map[string]interface{})
+		}
+
+		mcpServers, ok := yamlConfig["mcpServers"].(map[string]interface{})
+		if !ok {
+			mcpServers = make(map[string]interface{})
+		}
+
+		serverEntry := t.createServerMap(serverConf)
+		mcpServers[serverID] = serverEntry
+		yamlConfig["mcpServers"] = mcpServers
+
+		outputData, err = yaml.Marshal(yamlConfig)
+		if err != nil {
+			return fmt.Errorf("failed to marshal YAML config: %w", err)
+		}
+
+	case client.FormatTOML:
+		var tomlConfig map[string]interface{}
+
+		existingFile, err := os.ReadFile(clientConfigPath)
+		if err == nil && len(existingFile) > 0 {
+			if err := toml.Unmarshal(existingFile, &tomlConfig); err != nil {
+				// Abort on invalid TOML
+				return fmt.Errorf("failed to parse existing TOML config: %w", err)
+			}
+		}
+
+		if tomlConfig == nil {
+			tomlConfig = make(map[string]interface{})
+		}
+
+		if _, ok := tomlConfig["mcpServers"]; !ok {
+			tomlConfig["mcpServers"] = make(map[string]interface{})
+		}
+
+		mcpServers, ok := tomlConfig["mcpServers"].(map[string]interface{})
+		if !ok {
+			mcpServers = make(map[string]interface{})
+		}
+
+		serverEntry := t.createServerMap(serverConf)
+		mcpServers[serverID] = serverEntry
+		tomlConfig["mcpServers"] = mcpServers
+
+		buf := new(bytes.Buffer)
+		if err := toml.NewEncoder(buf).Encode(tomlConfig); err != nil {
+			return fmt.Errorf("failed to marshal updated TOML config: %w", err)
+		}
+		outputData = buf.Bytes()
+
+	default:
+		return fmt.Errorf("unsupported config format '%s' for client %s", formatType, clientName)
 	}
 
 	// Ensure the target directory exists
@@ -422,12 +488,37 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 	}
 
 	// Write the translated config file
-	if err := os.WriteFile(clientConfigPath, outputData, 0644); err != nil { // Use 0644 for client configs generally
+	if err := os.WriteFile(clientConfigPath, outputData, 0644); err != nil {
 		return fmt.Errorf("failed to write config file '%s' for client %s: %w", clientConfigPath, clientName, err)
 	}
 
 	fmt.Printf("  Successfully wrote config for %s to '%s'\n", clientName, clientConfigPath)
 	return nil
+}
+
+func (t *Translator) createServerMap(serverConf config.MCPServer) map[string]interface{} {
+	serverEntry := make(map[string]interface{})
+
+	if serverConf.Command != "" {
+		serverEntry["command"] = serverConf.Command
+	}
+	if len(serverConf.Args) > 0 {
+		serverEntry["args"] = serverConf.Args
+	}
+	if len(serverConf.Env) > 0 {
+		serverEntry["env"] = serverConf.Env
+	}
+	if serverConf.URL != "" {
+		serverEntry["url"] = serverConf.URL
+	}
+	if serverConf.Disabled {
+		serverEntry["disabled"] = serverConf.Disabled
+	}
+	if len(serverConf.AutoApprove) > 0 {
+		serverEntry["autoApprove"] = serverConf.AutoApprove
+	}
+
+	return serverEntry
 }
 
 // RemoveClientServers removes servers from client configurations that no longer exist in the main MCP configuration
@@ -452,115 +543,147 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 		return fmt.Errorf("failed to read client config file '%s': %w", clientConfigPath, err)
 	}
 
-	// If file is empty, nothing to do
 	if len(clientConfigData) == 0 {
 		return nil
 	}
 
-	format := strings.ToLower(filepath.Ext(clientConfigPath))
+	formatType := client.ConfigFormatEnum(clientConf.Type)
+	// Determine format type if not explicitly set
+	if formatType == "" {
+		ext := strings.ToLower(filepath.Ext(clientConfigPath))
+		switch ext {
+		case ".json":
+			// Try to guess from client name or default to simple json
+			if strings.Contains(clientName, "claude-desktop") {
+				formatType = client.FormatClaudeDesktop
+			} else if strings.Contains(clientName, "vscode") {
+				formatType = client.FormatVSCode
+			} else if strings.Contains(strings.ToLower(clientName), "continue") {
+				formatType = client.FormatContinue
+			} else {
+				formatType = client.FormatSimpleJSON
+			}
+		case ".yaml", ".yml":
+			formatType = client.FormatYAML
+		case ".toml":
+			formatType = client.FormatTOML
+		default:
+			// Fallback/Legacy logic if needed, or return error
+		}
+	}
 
-	// Process based on file format
-	switch format {
-	case ".json":
+	// Helper to parse JSON/JSONC
+	parseJSON := func(v interface{}) error {
+		standardized, err := hujson.Standardize(clientConfigData)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(standardized, v)
+	}
+
+	changed := false
+
+	switch formatType {
+	case client.FormatClaudeDesktop, client.FormatSimpleJSON:
 		var clientConfig map[string]interface{}
-		if err := json.Unmarshal(clientConfigData, &clientConfig); err != nil {
+		if err := parseJSON(&clientConfig); err != nil {
 			return fmt.Errorf("failed to parse client JSON config file '%s': %w", clientConfigPath, err)
 		}
 
-		// Handle different client formats
-		switch {
-		case strings.Contains(clientName, "claude-desktop"):
-			mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{})
-			if !ok {
-				// No mcpServers section, nothing to do
-				return nil
-			}
-
-			// Remove servers that don't exist in the main MCP configuration
-			changed := t.removeObsoleteServers(mcpServers)
-
-			if changed {
+		if mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{}); ok {
+			if t.removeObsoleteServers(mcpServers) {
+				changed = true
 				clientConfig["mcpServers"] = mcpServers
-				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal updated Claude Desktop config: %w", err)
-				}
-				return os.WriteFile(clientConfigPath, outputData, 0644)
-			}
-
-		case strings.Contains(clientName, "windsurf"):
-			mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{})
-			if !ok {
-				// No mcpServers section, nothing to do
-				return nil
-			}
-
-			// Remove servers that don't exist in the main MCP configuration
-			changed := t.removeObsoleteServers(mcpServers)
-
-			if changed {
-				clientConfig["mcpServers"] = mcpServers
-				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal updated Windsurf config: %w", err)
-				}
-				return os.WriteFile(clientConfigPath, outputData, 0644)
-			}
-
-		case strings.Contains(clientName, "vscode") || strings.Contains(clientName, "cursor"):
-			mcpObj, ok := clientConfig["mcp"].(map[string]interface{})
-			if !ok {
-				// No mcp section, nothing to do
-				return nil
-			}
-
-			servers, ok := mcpObj["servers"].(map[string]interface{})
-			if !ok {
-				// No servers section, nothing to do
-				return nil
-			}
-
-			// Remove servers that don't exist in the main MCP configuration
-			changed := t.removeObsoleteServers(servers)
-
-			if changed {
-				mcpObj["servers"] = servers
-				clientConfig["mcp"] = mcpObj
-				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal updated VS Code/Cursor config: %w", err)
-				}
-				return os.WriteFile(clientConfigPath, outputData, 0644)
-			}
-
-		default:
-			// For unknown clients with JSON format
-			mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{})
-			if !ok {
-				// No mcpServers section, nothing to do
-				return nil
-			}
-
-			// Remove servers that don't exist in the main MCP configuration
-			changed := t.removeObsoleteServers(mcpServers)
-
-			if changed {
-				clientConfig["mcpServers"] = mcpServers
-				outputData, err := json.MarshalIndent(clientConfig, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal updated generic JSON config: %w", err)
-				}
-				return os.WriteFile(clientConfigPath, outputData, 0644)
 			}
 		}
 
-	// For YAML and TOML formats, we would handle similarly but with their respective formats
-	// For now, only JSON format is fully implemented
-	case ".yaml", ".yml", ".toml":
-		fmt.Printf("  Warning: Removing servers from %s format not fully implemented for %s\n", format, clientName)
+		if changed {
+			outputData, err := json.MarshalIndent(clientConfig, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal updated config: %w", err)
+			}
+			return os.WriteFile(clientConfigPath, outputData, 0644)
+		}
 
-	default:
-		return fmt.Errorf("unsupported config format '%s' for client %s", format, clientName)
+	case client.FormatVSCode:
+		var clientConfig map[string]interface{}
+		if err := parseJSON(&clientConfig); err != nil {
+			return fmt.Errorf("failed to parse client JSON config file '%s': %w", clientConfigPath, err)
+		}
+
+		if clientConf.Key == "openctx.providers" {
+			if providers, ok := clientConfig["openctx.providers"].(map[string]interface{}); ok {
+				if t.removeObsoleteServers(providers) {
+					changed = true
+					clientConfig["openctx.providers"] = providers
+				}
+			}
+		} else {
+			if mcpObj, ok := clientConfig["mcp"].(map[string]interface{}); ok {
+				if servers, ok := mcpObj["servers"].(map[string]interface{}); ok {
+					if t.removeObsoleteServers(servers) {
+						changed = true
+						mcpObj["servers"] = servers
+						clientConfig["mcp"] = mcpObj
+					}
+				}
+			}
+		}
+
+		if changed {
+			outputData, err := json.MarshalIndent(clientConfig, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal updated config: %w", err)
+			}
+			return os.WriteFile(clientConfigPath, outputData, 0644)
+		}
+
+	case client.FormatContinue:
+		// Not implementing removal for Continue format in this patch yet as it involves list filtering
+		// leaving as TODO or simple log
+		fmt.Println("Warning: Automatic removal of obsolete servers not yet implemented for Continue format")
+
+	case client.FormatYAML:
+		var clientConfig map[string]interface{}
+		if err := yaml.Unmarshal(clientConfigData, &clientConfig); err != nil {
+			return fmt.Errorf("failed to parse client YAML config: %w", err)
+		}
+
+		if mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{}); ok {
+			if t.removeObsoleteServers(mcpServers) {
+				changed = true
+				clientConfig["mcpServers"] = mcpServers
+			}
+		}
+
+		if changed {
+			outputData, err := yaml.Marshal(clientConfig)
+			if err != nil {
+				return fmt.Errorf("failed to marshal updated YAML config: %w", err)
+			}
+			return os.WriteFile(clientConfigPath, outputData, 0644)
+		}
+
+	case client.FormatTOML:
+		var clientConfig map[string]interface{}
+		if err := toml.Unmarshal(clientConfigData, &clientConfig); err != nil {
+			return fmt.Errorf("failed to parse client TOML config: %w", err)
+		}
+
+		if mcpServers, ok := clientConfig["mcpServers"].(map[string]interface{}); ok {
+			if t.removeObsoleteServers(mcpServers) {
+				changed = true
+				clientConfig["mcpServers"] = mcpServers
+			}
+		}
+
+		if changed {
+			buf := new(bytes.Buffer)
+			if err := toml.NewEncoder(buf).Encode(clientConfig); err != nil {
+				return fmt.Errorf("failed to marshal updated TOML config: %w", err)
+			}
+			return os.WriteFile(clientConfigPath, buf.Bytes(), 0644)
+		}
 	}
 
 	return nil

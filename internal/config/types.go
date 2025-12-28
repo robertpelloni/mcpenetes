@@ -2,28 +2,33 @@ package config
 
 // Config represents the structure of config.yaml
 type Config struct {
-	Version    int               `yaml:"version"`
-	Registries []Registry        `yaml:"registries"`
-	MCPs       []string          `yaml:"mcps"`
-	Clients    map[string]Client `yaml:"clients"`
-	Backups    BackupConfig      `yaml:"backups"`
+	Version    int               `yaml:"version" json:"version"`
+	Registries []Registry        `yaml:"registries" json:"registries"`
+	MCPs       []string          `yaml:"mcps" json:"mcps"`
+	Clients    map[string]Client `yaml:"clients" json:"clients"`
+	Backups    BackupConfig      `yaml:"backups" json:"backups"`
 }
 
 // Registry defines a registry endpoint
 type Registry struct {
-	Name string `yaml:"name"`
-	URL  string `yaml:"url"`
+	Name string `yaml:"name" json:"name"`
+	URL  string `yaml:"url" json:"url"`
 }
 
 // Client defines a target client configuration location
 type Client struct {
-	ConfigPath string `yaml:"config_path"`
+	ConfigPath string `yaml:"config_path" json:"config_path"`
+	// Type/Format of the client config, used for translation
+	// If empty, defaults will be inferred
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+	// Key overrides the default JSON key if set (e.g. "openctx.providers")
+	Key string `yaml:"key,omitempty" json:"key,omitempty"`
 }
 
 // BackupConfig defines backup settings
 type BackupConfig struct {
-	Path      string `yaml:"path"`
-	Retention int    `yaml:"retention"`
+	Path      string `yaml:"path" json:"path"`
+	Retention int    `yaml:"retention" json:"retention"`
 }
 
 // MCPConfig represents the structure of mcp.json

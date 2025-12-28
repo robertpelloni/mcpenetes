@@ -16,8 +16,10 @@ Think of mcpenetes as your friendly neighborhood wizard who can:
 - 🔍 Search for available MCP servers from configured registries
 - 🔄 Switch between different MCP server configurations
 - 🧠 Apply configurations across all your MCP clients automatically
+- 🖥️ **New!** Manage everything via a beautiful Web UI
 - 💾 Backup your configurations before making any changes
 - 🛡️ Restore configurations if something goes wrong
+- 🏥 Diagnose system health with the `doctor` command
 
 ## 🚀 Installation
 
@@ -38,6 +40,18 @@ go install github.com/tuannvm/mcpenetes@latest
 
 ## 🏄‍♂️ Quick Start
 
+### Option 1: The Web UI (Recommended)
+
+Start the dashboard to view your clients, search for servers, and apply configurations visually:
+
+```bash
+mcpenetes ui
+```
+
+This will open `http://localhost:3000` in your default browser.
+
+### Option 2: The CLI Way
+
 1. **Search for available MCP servers**:
 
 ```bash
@@ -57,10 +71,12 @@ That's it! Your MCP configurations are now synced across all clients. Magic! ✨
 ### 🛠️ Available Commands
 
 ```
+ui             Start the Web UI dashboard
 search         Interactive fuzzy search for MCP versions and apply them
 apply          Applies MCP configuration to all clients
 load           Load MCP server configuration from clipboard
 restore        Restores client configurations from the latest backups
+doctor         Run system health checks and client detection verification
 ```
 
 ### 📋 Searching for MCP Servers
@@ -69,12 +85,6 @@ The `search` command lets you interactively find and select MCP servers from con
 
 ```bash
 mcpenetes search
-```
-
-You can also directly specify a server ID:
-
-```bash
-mcpenetes search claude-3-opus-0403
 ```
 
 By default, search results are cached to improve performance. Use the `--refresh` flag to force a refresh:
@@ -109,20 +119,57 @@ mcpenetes restore
 
 ## 🧩 Supported Clients
 
-mcpenetes automatically detects and configures the following MCP-compatible clients:
+mcpenetes automatically detects and configures over 30 MCP-compatible clients, including:
 
-- Claude Desktop
-- Windsurf
-- Cursor
-- Visual Studio Code extensions
+**IDEs & Editors:**
+*   VS Code, VS Code Insiders
+*   Cursor, Windsurf, Zed, Trae, PearAI, Void
+*   **JetBrains IDEs** (IntelliJ, PyCharm, etc.) via Junie
+*   **Melty** (VS Code Fork)
+*   **CodeBuddy** (VS Code Fork)
+*   **Kiro**
+*   **Antigravity IDE**
+
+**Extensions:**
+*   **CodeGPT**
+*   **Cline**
+*   **Roo Code**
+*   **Continue**
+*   **Cody (Sourcegraph)** (Configures `openctx.providers` in VS Code settings)
+
+**Desktop Apps:**
+*   Claude Desktop
+*   LM Studio
+*   AnythingLLM
+*   Tabby
+*   LibreChat
+*   Jan
+*   BoltAI
+*   **5ire**
+
+**CLIs & Terminals:**
+*   **Amazon Q (CodeWhisperer)**
+*   **Claude Code CLI**
+*   **LLM CLI** (Simon Willison)
+*   Goose CLI
+*   Mistral Vibe
+*   Code CLI (Codex)
+*   Grok CLI
+*   Open Interpreter
+*   Factory CLI
+*   Aider
+*   Warp Terminal
+
+### Adding Custom Clients
+You can support additional tools by creating a `clients.yaml` file in your config directory (e.g., `~/.config/mcpetes/clients.yaml`).
 
 ## 📁 Configuration Files
 
 mcpenetes uses the following configuration files:
 
-- `~/.config/mcpenetes/config.yaml`: Stores global configuration, including registered registries and selected MCP servers
-- `~/.config/mcpenetes/mcp.json`: Stores the MCP server configurations
-- `~/.config/mcpenetes/cache/`: Caches registry responses for faster access
+- `~/.config/mcpetes/config.yaml`: Stores global configuration, including registered registries and selected MCP servers
+- `~/.config/mcpetes/mcp.json`: Stores the MCP server configurations
+- `~/.config/mcpetes/cache/`: Caches registry responses for faster access
 
 ## 🤝 Contributing
 
