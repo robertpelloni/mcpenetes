@@ -41,6 +41,9 @@ type ClientDefinition struct {
 	ID           string
 	Name         string
 	ConfigFormat ConfigFormatEnum
+	// ConfigKey is an optional field to override the default JSON key
+	// e.g. "openctx.providers" instead of "mcp.servers" for VSCode format
+	ConfigKey string
 	// Map of OS to list of potential config paths
 	// supported OS keys: "windows", "darwin", "linux"
 	Paths map[string][]PathDefinition
@@ -163,6 +166,22 @@ var Registry = []ClientDefinition{
 		},
 	},
 	{
+		ID:           "amazon-q",
+		Name:         "Amazon Q (CodeWhisperer)",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".aws", "amazonq", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".aws", "amazonq", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".aws", "amazonq", "mcp.json")},
+			},
+		},
+	},
+	{
 		ID:           "jetbrains-junie",
 		Name:         "JetBrains (Junie)",
 		ConfigFormat: FormatSimpleJSON,
@@ -180,6 +199,23 @@ var Registry = []ClientDefinition{
 	},
 
 	// --- VSCode Extensions / "Autonomous Agents" ---
+	{
+		ID:           "cody",
+		Name:         "Cody (Sourcegraph)",
+		ConfigFormat: FormatVSCode,
+		ConfigKey:    "openctx.providers",
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Code", "User", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Code", "User", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Code", "User", "settings.json")},
+			},
+		},
+	},
 	{
 		ID:           "cline",
 		Name:         "Cline",
@@ -276,6 +312,25 @@ var Registry = []ClientDefinition{
 			},
 			"linux": {
 				{Base: BaseHome, Path: filepath.Join(".tabby-client", "agent", "config.toml")},
+			},
+		},
+	},
+	{
+		ID:           "librechat",
+		Name:         "LibreChat",
+		ConfigFormat: FormatYAML,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("librechat.yaml")}, // Often in project root or home
+				{Base: BaseHome, Path: filepath.Join(".librechat", "librechat.yaml")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join("librechat.yaml")},
+				{Base: BaseUserProfile, Path: filepath.Join(".librechat", "librechat.yaml")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join("librechat.yaml")},
+				{Base: BaseHome, Path: filepath.Join(".librechat", "librechat.yaml")},
 			},
 		},
 	},
@@ -425,6 +480,187 @@ var Registry = []ClientDefinition{
 			},
 		},
 	},
+	{
+		ID:           "melty",
+		Name:         "Melty",
+		ConfigFormat: FormatVSCode, // VSCode fork
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Melty", "User", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Melty", "User", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Melty", "User", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "codebuddy",
+		Name:         "CodeBuddy",
+		ConfigFormat: FormatVSCode, // VSCode fork/extension
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".codebuddy", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".codebuddy", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".codebuddy", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "kiro",
+		Name:         "Kiro",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".kiro", "settings", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".kiro", "settings", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".kiro", "settings", "mcp.json")},
+			},
+		},
+	},
+	{
+		ID:           "antigravity",
+		Name:         "Antigravity IDE",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".gemini", "antigravity", "mcp_config.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".gemini", "antigravity", "mcp_config.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".gemini", "antigravity", "mcp_config.json")},
+			},
+		},
+	},
+	{
+		ID:           "codegpt",
+		Name:         "CodeGPT",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Code", "User", "globalStorage", "DanielSanMedium.dscodegpt", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Code", "User", "globalStorage", "DanielSanMedium.dscodegpt", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Code", "User", "globalStorage", "DanielSanMedium.dscodegpt", "mcp.json")},
+			},
+		},
+	},
+	{
+		ID:           "5ire",
+		Name:         "5ire",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "5ire", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("5ire", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "5ire", "mcp.json")},
+			},
+		},
+	},
+	{
+		ID:           "jan",
+		Name:         "Jan",
+		ConfigFormat: FormatSimpleJSON, // Guessing simple JSON for now, might be in assistant.json or settings.json
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "Jan", "data", "settings.json")},
+				{Base: BaseHome, Path: filepath.Join("jan", "settings.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("Jan", "data", "settings.json")},
+				{Base: BaseUserProfile, Path: filepath.Join("jan", "settings.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".config", "Jan", "data", "settings.json")},
+				{Base: BaseHome, Path: filepath.Join("jan", "settings.json")},
+			},
+		},
+	},
+	{
+		ID:           "warp",
+		Name:         "Warp",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".local", "state", "warp-terminal", "mcp")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".local", "state", "warp-terminal", "mcp")},
+				{Base: BaseAppData, Path: filepath.Join("Warp", "mcp.json")}, // Fallback guess
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".local", "state", "warp-terminal", "mcp")},
+			},
+		},
+	},
+	{
+		ID:           "llm-cli",
+		Name:         "LLM CLI (Simon Willison)",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".llm-tools-mcp", "mcp.json")},
+				{Base: BaseHome, Path: filepath.Join(".config", "io.datasette.llm", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".llm-tools-mcp", "mcp.json")},
+				{Base: BaseAppData, Path: filepath.Join("io.datasette.llm", "mcp.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".llm-tools-mcp", "mcp.json")},
+				{Base: BaseHome, Path: filepath.Join(".config", "io.datasette.llm", "mcp.json")},
+			},
+		},
+	},
+	{
+		ID:           "claude-code",
+		Name:         "Claude Code CLI",
+		ConfigFormat: FormatSimpleJSON, // ~/.claude.json uses {"mcpServers": ...}
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join(".claude.json")},
+			},
+			"windows": {
+				{Base: BaseUserProfile, Path: filepath.Join(".claude.json")},
+			},
+			"linux": {
+				{Base: BaseHome, Path: filepath.Join(".claude.json")},
+			},
+		},
+	},
+	{
+		ID:           "boltai",
+		Name:         "BoltAI",
+		ConfigFormat: FormatSimpleJSON,
+		Paths: map[string][]PathDefinition{
+			"darwin": {
+				{Base: BaseHome, Path: filepath.Join("Library", "Application Support", "BoltAI", "mcp.json")},
+			},
+			"windows": {
+				{Base: BaseAppData, Path: filepath.Join("BoltAI", "mcp.json")}, // Standard assumption for Electron/similar apps
+			},
+			// Linux support for BoltAI unknown/unlikely
+		},
+	},
 }
 
 // DetectedClient represents a client found on the system
@@ -433,6 +669,7 @@ type DetectedClient struct {
 	Name         string
 	ConfigPath   string
 	ConfigFormat ConfigFormatEnum
+	ConfigKey    string
 }
 
 // UserRegistryFile is the path to the user-defined registry file
@@ -502,6 +739,7 @@ func DetectClients() (map[string]DetectedClient, error) {
 					Name:         def.Name,
 					ConfigPath:   fullPath,
 					ConfigFormat: def.ConfigFormat,
+					ConfigKey:    def.ConfigKey,
 				}
 				break // Found valid config file
 			}
@@ -515,6 +753,7 @@ func DetectClients() (map[string]DetectedClient, error) {
 					Name:         def.Name,
 					ConfigPath:   fullPath,
 					ConfigFormat: def.ConfigFormat,
+					ConfigKey:    def.ConfigKey,
 				}
 				break
 			}

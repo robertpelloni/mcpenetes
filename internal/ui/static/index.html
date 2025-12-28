@@ -11,6 +11,7 @@
         .card { padding: 1rem; border: 1px solid var(--muted-border-color); border-radius: var(--border-radius); }
         .success { color: var(--ins-color); }
         .error { color: var(--del-color); }
+        .warning { color: var(--pico-color-amber-500); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         .modal { display: none; }
@@ -26,9 +27,18 @@
             <ul>
                 <li><a href="#" onclick="switchTab('dashboard')">Dashboard</a></li>
                 <li><a href="#" onclick="switchTab('search')">Search & Install</a></li>
-                <li><a href="#" onclick="loadData()">Refresh</a></li>
+                <li><a href="#" onclick="switchTab('registries')">Registries</a></li>
+                <li><a href="#" onclick="loadData(); checkDoctor();">Refresh</a></li>
             </ul>
         </nav>
+
+        <!-- Doctor Status Banner -->
+        <div id="doctorBanner" style="display:none; margin-bottom: 1rem; padding: 0.5rem; border-radius: var(--border-radius); background-color: var(--card-background-color); border: 1px solid var(--muted-border-color);">
+            <details>
+                <summary id="doctorSummary">System Status: Checking...</summary>
+                <ul id="doctorList" style="margin-top: 0.5rem;"></ul>
+            </details>
+        </div>
 
         <!-- Dashboard Tab -->
         <div id="dashboard" class="tab-content active">
@@ -77,6 +87,23 @@
                 <div id="searchResults" class="card"></div>
             </section>
         </div>
+
+        <!-- Registries Tab -->
+        <div id="registries" class="tab-content">
+            <section>
+                <h3>Configured Registries</h3>
+                <div class="card">
+                    <div id="registriesList">Loading...</div>
+                </div>
+                <hr>
+                <h4>Add Registry</h4>
+                <div class="grid">
+                    <div><input type="text" id="newRegName" placeholder="Name (e.g. My Registry)"></div>
+                    <div><input type="url" id="newRegUrl" placeholder="URL (e.g. https://...)"></div>
+                    <div><button onclick="addRegistry()">Add</button></div>
+                </div>
+            </section>
+        </div>
     </main>
 
     <!-- Edit/Install Server Modal -->
@@ -120,9 +147,54 @@
 
                 renderClients();
                 renderServers();
+                renderRegistries();
             } catch (e) {
                 console.error(e);
                 document.getElementById('clientsList').innerHTML = `<span class="error">Error loading data: ${e}</span>`;
+            }
+        }
+
+        async function checkDoctor() {
+            try {
+                const res = await fetch('/api/doctor');
+                const results = await res.json();
+
+                const banner = document.getElementById('doctorBanner');
+                const summary = document.getElementById('doctorSummary');
+                const list = document.getElementById('doctorList');
+
+                banner.style.display = 'block';
+                list.innerHTML = '';
+
+                let errorCount = 0;
+                let warningCount = 0;
+
+                results.forEach(r => {
+                    let icon = '✅';
+                    let cls = 'success';
+                    if (r.status === 'error') {
+                        icon = '❌';
+                        cls = 'error';
+                        errorCount++;
+                    } else if (r.status === 'warning') {
+                        icon = '⚠️';
+                        cls = 'warning';
+                        warningCount++;
+                    }
+
+                    list.innerHTML += `<li class="${cls}">${icon} <strong>${r.name}</strong>: ${r.message}</li>`;
+                });
+
+                if (errorCount > 0) {
+                    summary.innerHTML = `System Status: <span class="error">❌ ${errorCount} Errors</span>, <span class="warning">${warningCount} Warnings</span>`;
+                } else if (warningCount > 0) {
+                    summary.innerHTML = `System Status: <span class="warning">⚠️ ${warningCount} Warnings</span>`;
+                } else {
+                    summary.innerHTML = `System Status: <span class="success">✅ All Systems Operational</span>`;
+                }
+
+            } catch (e) {
+                console.error("Doctor check failed", e);
             }
         }
 
@@ -162,6 +234,7 @@
                                 <strong>${name}</strong>: ${details}
                             </div>
                             <div style="flex-shrink: 0;">
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="inspectServer('${name}')">🔍 Inspect</button>
                                 <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditModal('${name}')">Edit</button>
                                 <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="deleteServer('${name}')">Delete</button>
                             </div>
@@ -170,6 +243,77 @@
             }
             html += '</ul>';
             list.innerHTML = html;
+        }
+
+        function renderRegistries() {
+            const list = document.getElementById('registriesList');
+            if (!configData.registries || configData.registries.length === 0) {
+                list.innerHTML = "No registries configured.";
+                return;
+            }
+
+            let html = '<ul>';
+            configData.registries.forEach(reg => {
+                html += `
+                    <li style="margin-bottom: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div><strong>${reg.name}</strong>: ${reg.url}</div>
+                            <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="removeRegistry('${reg.name}')">Remove</button>
+                        </div>
+                    </li>`;
+            });
+            html += '</ul>';
+            list.innerHTML = html;
+        }
+
+        async function addRegistry() {
+            const name = document.getElementById('newRegName').value;
+            const url = document.getElementById('newRegUrl').value;
+
+            if (!name || !url) {
+                alert("Name and URL are required");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/registry/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, url})
+                });
+
+                if (res.ok) {
+                    document.getElementById('newRegName').value = '';
+                    document.getElementById('newRegUrl').value = '';
+                    loadData();
+                } else {
+                    const err = await res.text();
+                    alert("Failed to add registry: " + err);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        async function removeRegistry(name) {
+            if (!confirm(`Remove registry '${name}'?`)) return;
+
+            try {
+                const res = await fetch('/api/registry/remove', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name})
+                });
+
+                if (res.ok) {
+                    loadData();
+                } else {
+                    const err = await res.text();
+                    alert("Failed to remove registry: " + err);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
         }
 
         function openEditModal(serverID) {
@@ -276,6 +420,30 @@
             }
         }
 
+        async function inspectServer(serverID) {
+            const server = configData.mcpServers[serverID];
+            if (!server) return;
+
+            try {
+                const res = await fetch('/api/server/inspect', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({serverId: serverID, config: server})
+                });
+
+                const data = await res.json();
+                if (data.status === 'success') {
+                    // Create a temporary modal or alert with the command
+                    // Using a prompt allows easy copying
+                    prompt(data.message, data.command);
+                } else {
+                    alert("Failed to get inspection command.");
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
         async function applyConfig() {
             const btn = document.getElementById('applyBtn');
             const resultArea = document.getElementById('resultArea');
@@ -362,6 +530,7 @@
 
         // Initial Load
         loadData();
+        checkDoctor(); // Load health status
     </script>
 </body>
 </html>

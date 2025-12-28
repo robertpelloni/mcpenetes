@@ -1,4 +1,12 @@
 package version
 
+import (
+	_ "embed"
+	"strings"
+)
+
+//go:embed VERSION
+var version string
+
 // Version is the current version of the application
-const Version = "1.1.0"
+var Version = strings.TrimSpace(version)

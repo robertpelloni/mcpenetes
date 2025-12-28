@@ -253,6 +253,7 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 
 	case client.FormatVSCode:
 		// Format: {"mcp": {"servers": {"server-id": {...}}}}
+		// OR custom key if clientConf.Key is set
 		var vscodeConfig map[string]interface{}
 
 		if err := parseJSONSafe(clientConfigPath, &vscodeConfig); err != nil {
@@ -263,31 +264,71 @@ func (t *Translator) TranslateAndApply(clientName string, clientConf config.Clie
 			vscodeConfig = make(map[string]interface{})
 		}
 
-		// Get or create mcp object
-		var mcpObj map[string]interface{}
-		if existingMcpObj, ok := vscodeConfig["mcp"].(map[string]interface{}); ok {
-			mcpObj = existingMcpObj
+		// Determine the root key path
+		// Default is "mcp.servers" (nested as "mcp": {"servers": ...})
+		// If clientConf.Key is set (e.g. "openctx.providers"), use that.
+
+		// For now, supporting specific cases based on key structure
+		if clientConf.Key == "openctx.providers" {
+			// Special handling for OpenCtx providers structure
+			// "openctx.providers": { "https://...": { "mcp.provider.uri": "file:///..." } }
+			// NOTE: This currently only supports the 'modelcontextprotocol' provider type from OpenCtx
+			// and assumes we are configuring it to point to a local file/command?
+			// Actually, OpenCtx MCP provider usually takes a URL or command.
+			// Given the complexity of OpenCtx generic provider, we'll try to map standard MCP config to it if possible,
+			// or simply inject it as a raw object if the user knows what they are doing.
+
+			// For simplicity in this iteration, we will treat it as a map where we inject the server config
+			// BUT OpenCtx providers usually expect a specific schema.
+			// Let's assume for Cody we are injecting into "openctx.providers".
+			// However, Cody/OpenCtx usually expects a map of Provider URLs to Config.
+
+			// If we are just injecting a standard MCP server list, this might not work directly with OpenCtx
+			// unless we are configuring the "mcp" provider specifically.
+
+			// Fallback: If the user explicitly requested this format, we try to inject it as a key.
+			var providers map[string]interface{}
+			if existing, ok := vscodeConfig["openctx.providers"].(map[string]interface{}); ok {
+				providers = existing
+			} else {
+				providers = make(map[string]interface{})
+			}
+
+			// We can't easily map a list of MCP servers to OpenCtx providers list without a specific adapter.
+			// But if the requirement is just to support the key:
+			// We will inject the server config under the serverID key in that map.
+			serverEntry := t.createServerMap(serverConf)
+			providers[serverID] = serverEntry
+			vscodeConfig["openctx.providers"] = providers
+
 		} else {
-			mcpObj = make(map[string]interface{})
-		}
+			// Standard VSCode MCP "mcp.servers" logic
+			// Get or create mcp object
+			var mcpObj map[string]interface{}
+			if existingMcpObj, ok := vscodeConfig["mcp"].(map[string]interface{}); ok {
+				mcpObj = existingMcpObj
+			} else {
+				mcpObj = make(map[string]interface{})
+			}
 
-		// Get or create servers object
-		var mcpServers map[string]interface{}
-		if existingServers, ok := mcpObj["servers"].(map[string]interface{}); ok {
-			mcpServers = existingServers
-		} else {
-			mcpServers = make(map[string]interface{})
-		}
+			// Get or create servers object
+			var mcpServers map[string]interface{}
+			if existingServers, ok := mcpObj["servers"].(map[string]interface{}); ok {
+				mcpServers = existingServers
+			} else {
+				mcpServers = make(map[string]interface{})
+			}
 
-		serverEntry := t.createServerMap(serverConf)
-		// VSCode format explicitly needs env even if empty, usually
-		if _, ok := serverEntry["env"]; !ok {
-			serverEntry["env"] = make(map[string]string)
-		}
+			serverEntry := t.createServerMap(serverConf)
+			// VSCode format explicitly needs env even if empty, usually
+			if _, ok := serverEntry["env"]; !ok {
+				serverEntry["env"] = make(map[string]string)
+			}
 
-		mcpServers[serverID] = serverEntry
-		mcpObj["servers"] = mcpServers
-		vscodeConfig["mcp"] = mcpObj
+			mcpServers[serverID] = serverEntry
+			mcpObj["servers"] = mcpServers
+			vscodeConfig["mcp"] = mcpObj
+		}
 
 		outputData, err = json.MarshalIndent(vscodeConfig, "", "  ")
 		if err != nil {
@@ -570,12 +611,21 @@ func (t *Translator) RemoveClientServers(clientName string, clientConf config.Cl
 			return fmt.Errorf("failed to parse client JSON config file '%s': %w", clientConfigPath, err)
 		}
 
-		if mcpObj, ok := clientConfig["mcp"].(map[string]interface{}); ok {
-			if servers, ok := mcpObj["servers"].(map[string]interface{}); ok {
-				if t.removeObsoleteServers(servers) {
+		if clientConf.Key == "openctx.providers" {
+			if providers, ok := clientConfig["openctx.providers"].(map[string]interface{}); ok {
+				if t.removeObsoleteServers(providers) {
 					changed = true
-					mcpObj["servers"] = servers
-					clientConfig["mcp"] = mcpObj
+					clientConfig["openctx.providers"] = providers
+				}
+			}
+		} else {
+			if mcpObj, ok := clientConfig["mcp"].(map[string]interface{}); ok {
+				if servers, ok := mcpObj["servers"].(map[string]interface{}); ok {
+					if t.removeObsoleteServers(servers) {
+						changed = true
+						mcpObj["servers"] = servers
+						clientConfig["mcp"] = mcpObj
+					}
 				}
 			}
 		}

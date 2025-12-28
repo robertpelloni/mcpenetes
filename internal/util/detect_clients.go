@@ -18,6 +18,7 @@ func DetectMCPClients() (map[string]config.Client, error) {
 		result[id] = config.Client{
 			ConfigPath: c.ConfigPath,
 			Type:       string(c.ConfigFormat),
+			Key:        c.ConfigKey,
 		}
 	}
 

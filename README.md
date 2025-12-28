@@ -19,6 +19,7 @@ Think of mcpenetes as your friendly neighborhood wizard who can:
 - 🖥️ **New!** Manage everything via a beautiful Web UI
 - 💾 Backup your configurations before making any changes
 - 🛡️ Restore configurations if something goes wrong
+- 🏥 Diagnose system health with the `doctor` command
 
 ## 🚀 Installation
 
@@ -75,6 +76,7 @@ search         Interactive fuzzy search for MCP versions and apply them
 apply          Applies MCP configuration to all clients
 load           Load MCP server configuration from clipboard
 restore        Restores client configurations from the latest backups
+doctor         Run system health checks and client detection verification
 ```
 
 ### 📋 Searching for MCP Servers
@@ -117,13 +119,46 @@ mcpenetes restore
 
 ## 🧩 Supported Clients
 
-mcpenetes automatically detects and configures a wide range of MCP-compatible clients, including:
+mcpenetes automatically detects and configures over 30 MCP-compatible clients, including:
 
-*   **IDEs**: VS Code, VS Code Insiders, Cursor, Windsurf, Zed, Trae, PearAI, Void
-*   **Extensions**: Cline, Roo Code, Continue
-*   **JetBrains**: IntelliJ/PyCharm (via Junie agent)
-*   **Desktop Apps**: Claude Desktop, LM Studio, AnythingLLM
-*   **CLIs**: Goose, Mistral Vibe, Code CLI, Grok CLI, Open Interpreter, Factory CLI, Aider
+**IDEs & Editors:**
+*   VS Code, VS Code Insiders
+*   Cursor, Windsurf, Zed, Trae, PearAI, Void
+*   **JetBrains IDEs** (IntelliJ, PyCharm, etc.) via Junie
+*   **Melty** (VS Code Fork)
+*   **CodeBuddy** (VS Code Fork)
+*   **Kiro**
+*   **Antigravity IDE**
+
+**Extensions:**
+*   **CodeGPT**
+*   **Cline**
+*   **Roo Code**
+*   **Continue**
+*   **Cody (Sourcegraph)** (Configures `openctx.providers` in VS Code settings)
+
+**Desktop Apps:**
+*   Claude Desktop
+*   LM Studio
+*   AnythingLLM
+*   Tabby
+*   LibreChat
+*   Jan
+*   BoltAI
+*   **5ire**
+
+**CLIs & Terminals:**
+*   **Amazon Q (CodeWhisperer)**
+*   **Claude Code CLI**
+*   **LLM CLI** (Simon Willison)
+*   Goose CLI
+*   Mistral Vibe
+*   Code CLI (Codex)
+*   Grok CLI
+*   Open Interpreter
+*   Factory CLI
+*   Aider
+*   Warp Terminal
 
 ### Adding Custom Clients
 You can support additional tools by creating a `clients.yaml` file in your config directory (e.g., `~/.config/mcpetes/clients.yaml`).
