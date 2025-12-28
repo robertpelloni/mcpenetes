@@ -234,6 +234,7 @@
                                 <strong>${name}</strong>: ${details}
                             </div>
                             <div style="flex-shrink: 0;">
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="inspectServer('${name}')">🔍 Inspect</button>
                                 <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditModal('${name}')">Edit</button>
                                 <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="deleteServer('${name}')">Delete</button>
                             </div>
@@ -416,6 +417,30 @@
                 }
             } catch (e) {
                 alert("Error deleting server: " + e);
+            }
+        }
+
+        async function inspectServer(serverID) {
+            const server = configData.mcpServers[serverID];
+            if (!server) return;
+
+            try {
+                const res = await fetch('/api/server/inspect', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({serverId: serverID, config: server})
+                });
+
+                const data = await res.json();
+                if (data.status === 'success') {
+                    // Create a temporary modal or alert with the command
+                    // Using a prompt allows easy copying
+                    prompt(data.message, data.command);
+                } else {
+                    alert("Failed to get inspection command.");
+                }
+            } catch (e) {
+                alert("Error: " + e);
             }
         }
 

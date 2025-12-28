@@ -55,6 +55,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/doctor", s.handleDoctor)
 	mux.HandleFunc("/api/registry/add", s.handleAddRegistry)
 	mux.HandleFunc("/api/registry/remove", s.handleRemoveRegistry)
+	mux.HandleFunc("/api/server/inspect", s.handleInspectServer)
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -94,6 +95,11 @@ type AddRegistryRequest struct {
 
 type RemoveRegistryRequest struct {
 	Name string `json:"name"`
+}
+
+type InspectRequest struct {
+	ServerID string           `json:"serverId"`
+	Config   config.MCPServer `json:"config"`
 }
 
 type ApplyResponse struct {
@@ -417,4 +423,46 @@ func (s *Server) handleRemoveRegistry(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Registry removed"})
+}
+
+func (s *Server) handleInspectServer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req InspectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// We simply construct the command the user would run to inspect this server
+	// Since we can't easily spawn a fully interactive inspector session and proxy it securely
+	// without significant complexity (websocket proxying, etc.),
+	// we will return the command string for the user to run in their terminal.
+	//
+	// Alternatively, if the inspector had a "headless" mode that output a URL, we could capture it.
+	// But `npx @modelcontextprotocol/inspector <command>` starts a server on localhost.
+
+	cmdStr := fmt.Sprintf("npx @modelcontextprotocol/inspector %s", req.Config.Command)
+	for _, arg := range req.Config.Args {
+		cmdStr += fmt.Sprintf(" %s", arg)
+	}
+
+	// Add environment variables hint if any
+	if len(req.Config.Env) > 0 {
+		envStr := ""
+		for k, v := range req.Config.Env {
+			envStr += fmt.Sprintf("%s='%s' ", k, v)
+		}
+		cmdStr = envStr + cmdStr
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "success",
+		"command": cmdStr,
+		"message": "To inspect this server, run the following command in your terminal:",
+	})
 }
