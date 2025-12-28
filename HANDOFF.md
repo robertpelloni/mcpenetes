@@ -2,7 +2,9 @@
 
 ## 📅 Session Summary
 **Date:** 2025-05-27
-**Status:** Major refactor completed. Web UI added. Extensive tool support added (30+ clients). User extensibility enabled.
+**Status:** Version 1.3.0 Released.
+**Changes:** Added Visual Registry Editor to Web UI.
+**Previous Status:** Major refactor completed. Web UI added. Extensive tool support added (30+ clients). User extensibility enabled.
 
 This session focused on transforming `mcpenetes` from a simple CLI tool into a comprehensive configuration manager for the Model Context Protocol (MCP) ecosystem. We addressed the user's need to support a vast array of AI tools (IDEs, CLIs, Desktop Apps) and provided a graphical interface.
 
@@ -35,12 +37,14 @@ We moved away from hardcoded detection logic in `util` to a data-driven **Regist
     -   `POST /api/server/update`: Updates server config directly (Edit feature).
     -   `POST /api/server/remove`: Removes a server configuration (Delete feature).
     -   `GET /api/doctor`: Runs system health checks.
+    -   **Registry Management**: `POST /api/registry/add`, `/api/registry/update`, `/api/registry/remove` (New in v1.3.0).
 -   **Frontend**: Single-page dashboard using Pico.css with features to:
     -   View detected clients and configured servers.
     -   Search specifically for MCP servers in registries.
     -   Install new servers with a customizable command wizard.
     -   **Edit** existing server configurations via a JSON modal.
     -   **Delete** server configurations.
+    -   **Registry Editor**: Visual interface to add, edit, and remove MCP registries (New in v1.3.0).
 
 ### 4. Robust Translation (`internal/translator`)
 -   **JSONC Support**: Integrated `github.com/tailscale/hujson` to safely parse VS Code `settings.json` files containing comments.
@@ -96,13 +100,12 @@ The following clients are currently supported in `internal/client/registry.go`:
 2.  **Detection Heuristic**: We detect clients by checking for the *config file first*. If missing, we check for the *parent directory*. This allows us to configure tools that are installed but haven't generated a config file yet (fresh installs).
 3.  **Search Workflow**: The CLI `search` command previously only updated `config.yaml` (legacy list). We refactored it to update `mcp.json` directly with a default `npx` configuration, making the "Search -> Apply" workflow functional.
 4.  **Race Conditions**: When multiple clients (e.g., VS Code and Cody) target the same file (`settings.json`), sequential processing is enforced to avoid data corruption.
+5.  **Registry Management**: Implemented `internal/registry/manager` to handle registry operations safely via the UI.
 
 ## 🚀 Future Roadmap
 
-1.  **More Tool Support**: Keep expanding the registry as new tools emerge.
-2.  **UI Enhancements**:
-    -   Log viewer for the MCP servers? (Hard since they run inside the clients).
-    -   Visual editor for `config.yaml` (Registries management).
+1.  **Log Viewer**: Analyze feasibility of viewing MCP server logs (std/err) from the UI.
+2.  **More Tool Support**: Keep expanding the registry as new tools emerge.
 3.  **Complex Configuration**: Support more advanced `openctx` provider mappings if Cody's requirements evolve.
 
 ## 📝 Memories

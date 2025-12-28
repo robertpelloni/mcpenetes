@@ -1,3 +1,20 @@
+## [1.3.0](https://github.com/tuannvm/mcpenetes/compare/v1.2.0...v1.3.0) (2025-05-27)
+
+### Features
+
+* **ui:** implement Visual Registry Editor for adding, updating, and removing registries.
+* **ui:** add Inspector feature to generate `npx @modelcontextprotocol/inspector` commands.
+* **api:** expose endpoints for registry management (`add`, `update`, `remove`).
+
+## [1.2.0](https://github.com/tuannvm/mcpenetes/compare/v1.1.0...v1.2.0) (2025-05-27)
+
+### Features
+
+* **client:** add extensive client support (~37 tools) including VS Code, Cursor, Claude, Amazon Q, etc.
+* **ui:** add Inspector integration.
+* **core:** implement safe configuration handling (JSONC, backups, race condition prevention).
+* **core:** implement sequential processing for clients targeting the same file.
+
 ## [1.1.0](https://github.com/tuannvm/mcpenetes/compare/v1.0.1...v1.1.0) (2025-05-27)
 
 ### Features
