@@ -127,6 +127,21 @@
         </article>
     </dialog>
 
+    <!-- Log Viewer Modal -->
+    <dialog id="logModal">
+        <article style="width: 100%; max-width: 900px;">
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeLogModal()"></a>
+                <span id="logModalTitle">Server Logs</span>
+            </header>
+            <pre id="logContent" style="max-height: 500px; overflow-y: auto; background: #111; color: #eee; padding: 1rem; border-radius: 4px; white-space: pre-wrap;">Loading...</pre>
+            <footer>
+                <button onclick="refreshLogs()" class="secondary outline">Refresh</button>
+                <a href="#" role="button" class="secondary" onclick="closeLogModal()">Close</a>
+            </footer>
+        </article>
+    </dialog>
+
     <!-- Edit/Install Server Modal -->
     <dialog id="editModal">
         <article>
@@ -255,6 +270,7 @@
                                 <strong>${name}</strong>: ${details}
                             </div>
                             <div style="flex-shrink: 0;">
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="viewLogs('${name}')">📜 Logs</button>
                                 <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="inspectServer('${name}')">🔍 Inspect</button>
                                 <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditModal('${name}')">Edit</button>
                                 <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="deleteServer('${name}')">Delete</button>
@@ -481,6 +497,41 @@
                 }
             } catch (e) {
                 alert("Error deleting server: " + e);
+            }
+        }
+
+        let currentLogServerID = null;
+
+        function closeLogModal() {
+            document.getElementById('logModal').removeAttribute('open');
+            currentLogServerID = null;
+        }
+
+        async function viewLogs(serverID) {
+            currentLogServerID = serverID;
+            document.getElementById('logModalTitle').innerText = `Logs: ${serverID}`;
+            document.getElementById('logContent').innerText = "Loading...";
+            document.getElementById('logModal').setAttribute('open', 'true');
+            await refreshLogs();
+        }
+
+        async function refreshLogs() {
+            if (!currentLogServerID) return;
+            const content = document.getElementById('logContent');
+
+            try {
+                // Add timestamp to prevent caching
+                const res = await fetch(`/api/logs?serverId=${encodeURIComponent(currentLogServerID)}&t=${Date.now()}`);
+                if (res.ok) {
+                    const text = await res.text();
+                    content.innerText = text || "(No logs found. Ensure the server is running with the proxy wrapper.)";
+                    // Scroll to bottom
+                    content.scrollTop = content.scrollHeight;
+                } else {
+                    content.innerText = `Error fetching logs: ${res.statusText}`;
+                }
+            } catch (e) {
+                content.innerText = `Error: ${e}`;
             }
         }
 

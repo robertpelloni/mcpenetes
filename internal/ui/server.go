@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/tuannvm/mcpenetes/internal/config"
@@ -57,6 +59,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/registry/update", s.handleUpdateRegistry)
 	mux.HandleFunc("/api/registry/remove", s.handleRemoveRegistry)
 	mux.HandleFunc("/api/server/inspect", s.handleInspectServer)
+	mux.HandleFunc("/api/logs", s.handleLogs)
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -456,6 +459,42 @@ func (s *Server) handleRemoveRegistry(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Registry removed"})
+}
+
+func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	serverID := r.URL.Query().Get("serverId")
+	if serverID == "" {
+		http.Error(w, "serverId is required", http.StatusBadRequest)
+		return
+	}
+
+	// For simplicity, we just dump the whole file content for now.
+	// Streaming via WebSocket or SSE is better but requires more setup.
+	// Given the scope, a polling endpoint that returns the full log (or tail) is sufficient.
+
+	home, _ := os.UserHomeDir()
+	// Security check: Ensure serverID doesn't contain path traversal
+	if filepath.Base(serverID) != serverID {
+		http.Error(w, "Invalid server ID", http.StatusBadRequest)
+		return
+	}
+
+	logPath := filepath.Join(home, ".config", "mcpetes", "logs", fmt.Sprintf("%s.log", serverID))
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return empty if no log yet
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte(""))
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error reading log: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write(content)
 }
 
 func (s *Server) handleInspectServer(w http.ResponseWriter, r *http.Request) {
