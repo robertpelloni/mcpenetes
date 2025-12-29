@@ -1,3 +1,11 @@
+## [1.4.0](https://github.com/tuannvm/mcpenetes/compare/v1.3.0...v1.4.0) (2025-05-27)
+
+### Features
+
+* **cli:** add `mcpenetes proxy` command to wrap server execution and capture stderr for logging.
+* **ui:** add Log Viewer to inspect server logs directly from the dashboard.
+* **api:** add `/api/logs` endpoint to retrieve server logs.
+
 ## [1.3.0](https://github.com/tuannvm/mcpenetes/compare/v1.2.0...v1.3.0) (2025-05-27)
 
 ### Features

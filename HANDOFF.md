@@ -2,9 +2,9 @@
 
 ## 📅 Session Summary
 **Date:** 2025-05-27
-**Status:** Version 1.3.0 Released.
-**Changes:** Added Visual Registry Editor to Web UI.
-**Previous Status:** Major refactor completed. Web UI added. Extensive tool support added (30+ clients). User extensibility enabled.
+**Status:** Version 1.4.0 Released.
+**Changes:** Added Log Viewer and Proxy Command.
+**Previous Status:** Version 1.3.0 (Visual Registry Editor).
 
 This session focused on transforming `mcpenetes` from a simple CLI tool into a comprehensive configuration manager for the Model Context Protocol (MCP) ecosystem. We addressed the user's need to support a vast array of AI tools (IDEs, CLIs, Desktop Apps) and provided a graphical interface.
 
@@ -38,6 +38,7 @@ We moved away from hardcoded detection logic in `util` to a data-driven **Regist
     -   `POST /api/server/remove`: Removes a server configuration (Delete feature).
     -   `GET /api/doctor`: Runs system health checks.
     -   **Registry Management**: `POST /api/registry/add`, `/api/registry/update`, `/api/registry/remove` (New in v1.3.0).
+    -   **Log Viewer**: `/api/logs` (New in v1.4.0).
 -   **Frontend**: Single-page dashboard using Pico.css with features to:
     -   View detected clients and configured servers.
     -   Search specifically for MCP servers in registries.
@@ -45,11 +46,17 @@ We moved away from hardcoded detection logic in `util` to a data-driven **Regist
     -   **Edit** existing server configurations via a JSON modal.
     -   **Delete** server configurations.
     -   **Registry Editor**: Visual interface to add, edit, and remove MCP registries (New in v1.3.0).
+    -   **Log Viewer**: Visual interface to view logs captured by the proxy (New in v1.4.0).
 
 ### 4. Robust Translation (`internal/translator`)
 -   **JSONC Support**: Integrated `github.com/tailscale/hujson` to safely parse VS Code `settings.json` files containing comments.
 -   **Safety**: The translator now aborts if the existing config file cannot be parsed, preventing data loss.
 -   **Custom Keys**: Supports injecting MCP configurations into custom JSON keys (e.g., `openctx.providers` for Cody) via the `ConfigKey` property.
+
+### 5. Proxy Wrapper (`cmd/proxy`, `internal/proxy`)
+-   **Architecture**: `mcpenetes proxy <flags> -- <command> <args>`
+-   **Purpose**: Wraps MCP server execution to capture stderr logs to a file (`~/.config/mcpetes/logs/<server-id>.log`) while piping stdin/stdout (JSON-RPC) transparently.
+-   **Usage**: Allows the Log Viewer to function by providing a source of logs.
 
 ## 🛠️ Supported Clients (Built-in)
 
@@ -101,12 +108,13 @@ The following clients are currently supported in `internal/client/registry.go`:
 3.  **Search Workflow**: The CLI `search` command previously only updated `config.yaml` (legacy list). We refactored it to update `mcp.json` directly with a default `npx` configuration, making the "Search -> Apply" workflow functional.
 4.  **Race Conditions**: When multiple clients (e.g., VS Code and Cody) target the same file (`settings.json`), sequential processing is enforced to avoid data corruption.
 5.  **Registry Management**: Implemented `internal/registry/manager` to handle registry operations safely via the UI.
+6.  **Proxy Logging**: We decided to implement a proxy wrapper rather than scraping client logs because clients store logs in non-standard, transient locations. The proxy approach is more robust but requires the user (or automation) to modify the server command.
 
 ## 🚀 Future Roadmap
 
-1.  **Log Viewer**: Analyze feasibility of viewing MCP server logs (std/err) from the UI.
-2.  **More Tool Support**: Keep expanding the registry as new tools emerge.
-3.  **Complex Configuration**: Support more advanced `openctx` provider mappings if Cody's requirements evolve.
+1.  **More Tool Support**: Keep expanding the registry as new tools emerge.
+2.  **Complex Configuration**: Support more advanced `openctx` provider mappings if Cody's requirements evolve.
+3.  **Docker Desktop Support**: Investigate `docker mcp` CLI integration or config file location.
 
 ## 📝 Memories
 -   The project uses `github.com/tailscale/hujson` to parse JSONC.
