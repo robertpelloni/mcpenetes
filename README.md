@@ -16,7 +16,8 @@ Think of mcpenetes as your friendly neighborhood wizard who can:
 - 🔍 Search for available MCP servers from configured registries
 - 🔄 Switch between different MCP server configurations
 - 🧠 Apply configurations across all your MCP clients automatically
-- 🖥️ **New!** Manage everything via a beautiful Web UI
+- 🖥️ **Web UI:** Manage everything via a beautiful dashboard (`mcpenetes ui`)
+- 📜 **Log Viewer:** View stdout/stderr logs from your MCP servers directly in the UI
 - 💾 Backup your configurations before making any changes
 - 🛡️ Restore configurations if something goes wrong
 - 🏥 Diagnose system health with the `doctor` command
@@ -48,7 +49,11 @@ Start the dashboard to view your clients, search for servers, and apply configur
 mcpenetes ui
 ```
 
-This will open `http://localhost:3000` in your default browser.
+This will open `http://localhost:3000` in your default browser. From here you can:
+- **Search & Install** new servers.
+- **Edit** existing configurations.
+- **View Logs** for running servers.
+- **Manage Registries** (Add/Remove sources).
 
 ### Option 2: The CLI Way
 
@@ -66,6 +71,16 @@ mcpenetes apply
 
 That's it! Your MCP configurations are now synced across all clients. Magic! ✨
 
+### Option 3: Proxy Wrapper (For Logging)
+
+To enable logging for a server, wrap the command with `mcpenetes proxy`:
+
+```bash
+mcpenetes proxy --server-id my-server -- npx -y @modelcontextprotocol/server-filesystem /path/to/files
+```
+
+This captures logs to `~/.config/mcpetes/logs/my-server.log`, which can be viewed in the Web UI.
+
 ## 📚 Usage Guide
 
 ### 🛠️ Available Commands
@@ -77,6 +92,7 @@ apply          Applies MCP configuration to all clients
 load           Load MCP server configuration from clipboard
 restore        Restores client configurations from the latest backups
 doctor         Run system health checks and client detection verification
+proxy          Run a command wrapped in the logging proxy
 ```
 
 ### 📋 Searching for MCP Servers
@@ -169,6 +185,7 @@ mcpenetes uses the following configuration files:
 
 - `~/.config/mcpetes/config.yaml`: Stores global configuration, including registered registries and selected MCP servers
 - `~/.config/mcpetes/mcp.json`: Stores the MCP server configurations
+- `~/.config/mcpetes/logs/`: Stores server logs captured by the proxy wrapper
 - `~/.config/mcpetes/cache/`: Caches registry responses for faster access
 
 ## 🤝 Contributing

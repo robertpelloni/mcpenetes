@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/tuannvm/mcpenetes/compare/v1.4.0...v1.4.1) (2025-05-27)
+
+### Documentation
+
+* **docs:** update README.md and DASHBOARD.md to reflect new features and project structure.
+* **docs:** document Proxy Wrapper usage and Log Viewer.
+
 ## [1.4.0](https://github.com/tuannvm/mcpenetes/compare/v1.3.0...v1.4.0) (2025-05-27)
 
 ### Features
