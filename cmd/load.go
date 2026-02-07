@@ -1,15 +1,14 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/tailscale/hujson"
 	"github.com/tuannvm/mcpenetes/internal/config"
+	"github.com/tuannvm/mcpenetes/internal/core"
 	"github.com/tuannvm/mcpenetes/internal/log"
 )
 
@@ -33,66 +32,29 @@ var loadCmd = &cobra.Command{
 			return
 		}
 
-		// Use hujson to sanitize potentially commented JSON from clipboard
-		standardized, err := hujson.Standardize([]byte(clipboardContent))
+		// Load config
+		cfg, err := config.LoadConfig()
 		if err != nil {
-			log.Fatal("Failed to standardize clipboard content (invalid JSONC?): %v", err)
-			return
+			log.Fatal("Error loading config: %v", err)
 		}
 
-		// Parse clipboard content as JSON
-		var clipboardData map[string]interface{}
-		err = json.Unmarshal(standardized, &clipboardData)
-		if err != nil {
-			log.Fatal("Failed to parse clipboard content as JSON: %v", err)
-			return
-		}
-
-		// Check if the JSON has the expected structure
-		mcpServers, ok := clipboardData["mcpServers"]
-		if !ok {
-			log.Fatal("Clipboard content does not contain 'mcpServers' key")
-			return
-		}
-
-		// Convert to JSON string to reuse in MCPConfig
-		mcpServersJSON, err := json.Marshal(mcpServers)
-		if err != nil {
-			log.Fatal("Failed to convert mcpServers to JSON: %v", err)
-			return
-		}
-
-		// Parse mcpServers into our config structure
-		var mcpConfig config.MCPConfig
-		err = json.Unmarshal([]byte(fmt.Sprintf(`{"mcpServers": %s}`, string(mcpServersJSON))), &mcpConfig)
-		if err != nil {
-			log.Fatal("Failed to parse mcpServers config: %v", err)
-			return
-		}
-
-		// Load existing config
-		existingConfig, err := config.LoadMCPConfig()
+		mcpCfg, err := config.LoadMCPConfig()
 		if err != nil {
 			// If error is because the file doesn't exist, create a new config
-			existingConfig = &config.MCPConfig{
+			mcpCfg = &config.MCPConfig{
 				MCPServers: make(map[string]config.MCPServer),
 			}
 		}
 
-		// Merge new servers into existing config
-		for name, server := range mcpConfig.MCPServers {
-			existingConfig.MCPServers[name] = server
-			log.Info("Added MCP server: %s", name)
-		}
+		manager := core.NewManager(cfg, mcpCfg)
 
-		// Save the updated config
-		err = config.SaveMCPConfig(existingConfig)
+		// Import
+		count, err := manager.ImportConfig(clipboardContent)
 		if err != nil {
-			log.Fatal("Failed to save config: %v", err)
-			return
+			log.Fatal("Failed to import configuration: %v", err)
 		}
 
-		log.Success("Successfully loaded MCP configuration from clipboard")
+		log.Success("Successfully loaded %d MCP servers from clipboard", count)
 		log.Info("Run 'mcpenetes apply' to install these servers to your clients.")
 	},
 }
@@ -108,7 +70,14 @@ func getClipboard() (string, error) {
 		cmd = exec.Command("pbpaste")
 	case "linux":
 		// Try xclip first, fallback to wl-paste?
-		cmd = exec.Command("xclip", "-selection", "clipboard", "-o")
+		// Check if xclip is installed
+		if _, err := exec.LookPath("xclip"); err == nil {
+			cmd = exec.Command("xclip", "-selection", "clipboard", "-o")
+		} else if _, err := exec.LookPath("wl-paste"); err == nil {
+			cmd = exec.Command("wl-paste")
+		} else {
+			return "", fmt.Errorf("no clipboard utility found (install xclip or wl-clipboard)")
+		}
 	case "windows":
 		cmd = exec.Command("powershell.exe", "-command", "Get-Clipboard")
 	default:
