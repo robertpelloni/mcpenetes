@@ -68,6 +68,17 @@ That's it! Your MCP configurations are now synced across all clients. Magic! ✨
 
 ## 📚 Usage Guide
 
+### 🖥️ Web UI Dashboard
+
+The Web UI provides a visual interface for managing your MCP ecosystem:
+
+*   **Dashboard**: View detected clients and configured servers. Inspect server commands, edit configurations, or delete servers.
+*   **Search & Install**: Find new servers from configured registries and install them with one click.
+*   **Backups**: View a history of configuration backups for each client and restore them if needed.
+*   **Import Config**: Easily import an existing `mcpServers` JSON configuration by pasting it into the UI.
+*   **Registries**: Manage your MCP server sources.
+*   **Help**: Built-in documentation and troubleshooting guides.
+
 ### 🛠️ Available Commands
 
 ```

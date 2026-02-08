@@ -56,6 +56,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/registry/add", s.handleAddRegistry)
 	mux.HandleFunc("/api/registry/remove", s.handleRemoveRegistry)
 	mux.HandleFunc("/api/server/inspect", s.handleInspectServer)
+	mux.HandleFunc("/api/backups", s.handleGetBackups)
+	mux.HandleFunc("/api/restore", s.handleRestoreBackup)
+	mux.HandleFunc("/api/import", s.handleImportConfig)
+	mux.HandleFunc("/api/logs", s.handleGetLogs)
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -104,6 +108,15 @@ type InspectRequest struct {
 
 type ApplyResponse struct {
 	Results []core.ApplyResult `json:"results"`
+}
+
+type RestoreRequest struct {
+	ClientName string `json:"client"`
+	BackupFile string `json:"file"`
+}
+
+type ImportRequest struct {
+	Config string `json:"config"`
 }
 
 func (s *Server) handleGetData(w http.ResponseWriter, r *http.Request) {
@@ -437,20 +450,11 @@ func (s *Server) handleInspectServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// We simply construct the command the user would run to inspect this server
-	// Since we can't easily spawn a fully interactive inspector session and proxy it securely
-	// without significant complexity (websocket proxying, etc.),
-	// we will return the command string for the user to run in their terminal.
-	//
-	// Alternatively, if the inspector had a "headless" mode that output a URL, we could capture it.
-	// But `npx @modelcontextprotocol/inspector <command>` starts a server on localhost.
-
 	cmdStr := fmt.Sprintf("npx @modelcontextprotocol/inspector %s", req.Config.Command)
 	for _, arg := range req.Config.Args {
 		cmdStr += fmt.Sprintf(" %s", arg)
 	}
 
-	// Add environment variables hint if any
 	if len(req.Config.Env) > 0 {
 		envStr := ""
 		for k, v := range req.Config.Env {
@@ -465,4 +469,109 @@ func (s *Server) handleInspectServer(w http.ResponseWriter, r *http.Request) {
 		"command": cmdStr,
 		"message": "To inspect this server, run the following command in your terminal:",
 	})
+}
+
+func (s *Server) handleGetBackups(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// We don't strictly need MCPConfig for listing backups, but manager expects it.
+	mcpCfg := &config.MCPConfig{}
+
+	manager := core.NewManager(cfg, mcpCfg)
+	backups, err := manager.ListBackups()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error listing backups: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(backups)
+}
+
+func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RestoreRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ClientName == "" || req.BackupFile == "" {
+		http.Error(w, "Client name and backup file are required", http.StatusBadRequest)
+		return
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading config: %v", err), http.StatusInternalServerError)
+		return
+	}
+	mcpCfg := &config.MCPConfig{} // Not needed for restore
+
+	manager := core.NewManager(cfg, mcpCfg)
+	err = manager.RestoreClient(req.ClientName, req.BackupFile)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error restoring backup: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": fmt.Sprintf("Restored backup for %s", req.ClientName)})
+}
+
+func (s *Server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ImportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Config == "" {
+		http.Error(w, "Config content is required", http.StatusBadRequest)
+		return
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	mcpCfg, err := config.LoadMCPConfig()
+	if err != nil {
+		// Create new if missing
+		mcpCfg = &config.MCPConfig{MCPServers: make(map[string]config.MCPServer)}
+	}
+
+	manager := core.NewManager(cfg, mcpCfg)
+	count, err := manager.ImportConfig(req.Config)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error importing config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "success",
+		"message": fmt.Sprintf("Imported %d servers", count),
+	})
+}
+
+func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request) {
+	logs := log.GetRecentLogs()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(logs)
 }
