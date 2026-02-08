@@ -1,4 +1,642 @@
-        async function restoreBackup(clientName, fileName) {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mcpenetes Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        .container { max-width: 1200px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .card { padding: 1rem; border: 1px solid var(--muted-border-color); border-radius: var(--border-radius); }
+        .success { color: var(--ins-color); }
+        .error { color: var(--del-color); }
+        .warning { color: var(--pico-color-amber-500); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .modal { display: none; }
+        .modal[open] { display: block; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <nav>
+            <ul>
+                <li><strong>🧙‍♂️ mcpenetes</strong> <small id="versionDisplay"></small></li>
+            </ul>
+            <ul>
+                <li><a href="#" onclick="switchTab('dashboard')">Dashboard</a></li>
+                <li><a href="#" onclick="switchTab('search')">Search & Install</a></li>
+                <li><a href="#" onclick="switchTab('registries')">Registries</a></li>
+                <li><a href="#" onclick="switchTab('clients')">Clients</a></li>
+                <li><a href="#" onclick="switchTab('backups')">Backups</a></li>
+                <li><a href="#" onclick="switchTab('logs')">Logs</a></li>
+                <li><a href="#" onclick="switchTab('help')">Help</a></li>
+                <li><a href="#" onclick="openImportModal()">Import</a></li>
+
+                <li><a href="#" onclick=" ">Refresh</a></li>
+            </ul>
+        </nav>
+
+        <!-- Doctor Status Banner -->
+        <div id="doctorBanner" style="display:none; margin-bottom: 1rem; padding: 0.5rem; border-radius: var(--border-radius); background-color: var(--card-background-color); border: 1px solid var(--muted-border-color);">
+            <details>
+                <summary id="doctorSummary">System Status: Checking...</summary>
+                <ul id="doctorList" style="margin-top: 0.5rem;"></ul>
+            </details>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <div class="grid">
+                <!-- Detected Clients -->
+                <section>
+                    <h3>Detected Clients</h3>
+                    <div class="card">
+                        <form id="clientsForm">
+                            <div id="clientsList">Loading...</div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Configured MCP Servers -->
+                <section>
+                    <h3>Configured MCP Servers</h3>
+                    <div class="card">
+                        <div id="serversList">Loading...</div>
+                    </div>
+                </section>
+            </div>
+
+            <hr>
+
+            <!-- Actions -->
+            <section>
+                <h3>Actions</h3>
+                <button onclick="applyConfig()" id="applyBtn">Apply Configuration to Selected Clients</button>
+                <div id="resultArea"></div>
+            </section>
+        </div>
+
+        <!-- Search Tab -->
+        <div id="search" class="tab-content">
+            <section>
+                <h3>Search MCP Registry</h3>
+                <div class="grid">
+                    <div>
+                        <input type="search" id="searchInput" placeholder="Search for MCP servers..." onkeyup="if(event.key === 'Enter') searchServers()">
+                    </div>
+                    <div>
+                        <button onclick="searchServers()" id="searchBtn">Search</button>
+                    </div>
+                </div>
+                <div id="searchResults" class="card"></div>
+            </section>
+        </div>
+
+        <!-- Registries Tab -->
+        <div id="registries" class="tab-content">
+            <section>
+                <h3>Configured Registries</h3>
+                <div class="card">
+                    <div id="registriesList">Loading...</div>
+                </div>
+                <hr>
+                <h4>Add Registry</h4>
+                <div class="grid">
+                    <div><input type="text" id="newRegName" placeholder="Name (e.g. My Registry)"></div>
+                    <div><input type="url" id="newRegUrl" placeholder="URL (e.g. https://...)"></div>
+                    <div><button onclick="addRegistry()">Add</button></div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Clients Tab -->
+        <div id="clients" class="tab-content">
+            <section>
+                <h3>Manage Custom Clients</h3>
+                <div class="card">
+                    <div id="customClientsList">Loading...</div>
+                </div>
+                <hr>
+                <h4>Add Custom Client</h4>
+                <div class="grid">
+                    <div>
+                        <label>ID</label>
+                        <input type="text" id="newClientID" placeholder="e.g. my-tool">
+                    </div>
+                    <div>
+                        <label>Name</label>
+                        <input type="text" id="newClientName" placeholder="e.g. My Tool">
+                    </div>
+                </div>
+                <div class="grid">
+                    <div>
+                        <label>Config Format</label>
+                        <select id="newClientFormat">
+                            <option value="simple-json">Simple JSON (mcpServers)</option>
+                            <option value="vscode">VS Code (mcp.servers)</option>
+                            <option value="claude-desktop">Claude Desktop</option>
+                            <option value="yaml">YAML</option>
+                            <option value="toml">TOML</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Base Directory</label>
+                        <select id="newClientBase">
+                            <option value="home">Home Directory (~/)</option>
+                            <option value="appdata">AppData / .config</option>
+                            <option value="userprofile">UserProfile</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label>Relative Path</label>
+                    <input type="text" id="newClientPath" placeholder="e.g. .config/tool/config.json">
+                </div>
+                <button onclick="addCustomClient()">Add Client</button>
+            </section>
+        </div>
+
+        <!-- Backups Tab -->
+        <div id="backups" class="tab-content">
+            <section>
+                <h3>Configuration Backups</h3>
+                <p>Restore previous configurations if something goes wrong.</p>
+                <div class="card">
+                    <div id="backupsList">Loading...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="logs" class="tab-content">
+            <section>
+                <h3>Application Logs</h3>
+                <div class="card" style="background: #1e1e1e; color: #d4d4d4; padding: 1rem; height: 500px; overflow-y: auto; font-family: monospace; white-space: pre-wrap;" id="logsContainer">
+                    Loading logs...
+                </div>
+                <button onclick="loadLogs()" class="secondary outline" style="margin-top: 1rem;">Refresh Logs</button>
+            </section>
+        </div>
+
+        <!-- Help Tab -->
+        <div id="help" class="tab-content">
+            <section>
+                <h3>Help & Documentation</h3>
+                <article>
+                    <h4>🚀 Getting Started</h4>
+                    <p><strong>mcpenetes</strong> helps you manage your MCP servers across multiple clients.</p>
+                    <ul>
+                        <li><strong>Dashboard:</strong> View detected clients and configured servers. Apply configurations here.</li>
+                        <li><strong>Search:</strong> Find new MCP servers from registries and install them.</li>
+                        <li><strong>Clients:</strong> Add support for custom tools that aren't built-in.</li>
+                    </ul>
+
+                    <h4>🛠️ Managing Custom Clients</h4>
+                    <p>If your tool isn't detected automatically, you can add it in the <strong>Clients</strong> tab.</p>
+                    <p>You'll need to know:</p>
+                    <ul>
+                        <li><strong>Config Format:</strong> Does it use <code>mcpServers</code> (Simple JSON) or VS Code style settings?</li>
+                        <li><strong>Path:</strong> Where the config file is located relative to your home or config directory.</li>
+                    </ul>
+
+                    <h4>🔍 Inspecting Configurations</h4>
+                    <p>Click the <strong>👁️</strong> icon next to a client in the Dashboard to view its actual configuration file content. This is useful for debugging.</p>
+
+                    <h4>💾 Backups</h4>
+                    <p>Every time you apply a configuration, a backup is created. You can restore them from the <strong>Backups</strong> tab.</p>
+                </article>
+            </section>
+        </div>
+    </main>
+
+    <!-- Edit/Install Server Modal -->
+    <dialog id="editModal">
+        <article>
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeEditModal()"></a>
+                <span id="modalTitle">Edit Server Configuration</span>
+            </header>
+            <form id="editForm">
+                <input type="hidden" id="editServerID">
+                <input type="hidden" id="editMode" value="edit"> <!-- 'edit' or 'install' -->
+
+                <label for="editConfigJSON">Configuration (JSON)</label>
+                <textarea id="editConfigJSON" rows="10" style="font-family: monospace;"></textarea>
+                <small>For installation, customize the command and arguments below. Commonly <code>npx -y package-name</code> or <code>uvx package-name</code>.</small>
+            </form>
+            <footer>
+                <a href="#" role="button" class="secondary" onclick="closeEditModal()">Cancel</a>
+                <a href="#" role="button" onclick="saveServerConfig()">Save / Install</a>
+            </footer>
+        </article>
+    </dialog>
+
+    <script>
+        let configData = null;
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        async function loadData() {
+            try {
+                const res = await fetch('/api/data');
+                configData = await res.json();
+
+                if (configData.version) {
+                    document.getElementById('versionDisplay').innerText = `v${configData.version}`;
+                }
+
+                renderClients();
+                renderServers();
+                renderRegistries();
+            } catch (e) {
+                console.error(e);
+                document.getElementById('clientsList').innerHTML = `<span class="error">Error loading data: ${e}</span>`;
+            }
+        }
+
+        async function checkDoctor() {
+            try {
+                const res = await fetch('/api/doctor');
+                const results = await res.json();
+
+                const banner = document.getElementById('doctorBanner');
+                const summary = document.getElementById('doctorSummary');
+                const list = document.getElementById('doctorList');
+
+                banner.style.display = 'block';
+                list.innerHTML = '';
+
+                let errorCount = 0;
+                let warningCount = 0;
+
+                results.forEach(r => {
+                    let icon = '✅';
+                    let cls = 'success';
+                    if (r.status === 'error') {
+                        icon = '❌';
+                        cls = 'error';
+                        errorCount++;
+                    } else if (r.status === 'warning') {
+                        icon = '⚠️';
+                        cls = 'warning';
+                        warningCount++;
+                    }
+
+                    list.innerHTML += `<li class="${cls}">${icon} <strong>${r.name}</strong>: ${r.message}</li>`;
+                });
+
+                if (errorCount > 0) {
+                    summary.innerHTML = `System Status: <span class="error">❌ ${errorCount} Errors</span>, <span class="warning">${warningCount} Warnings</span>`;
+                } else if (warningCount > 0) {
+                    summary.innerHTML = `System Status: <span class="warning">⚠️ ${warningCount} Warnings</span>`;
+                } else {
+                    summary.innerHTML = `System Status: <span class="success">✅ All Systems Operational</span>`;
+                }
+
+            } catch (e) {
+                console.error("Doctor check failed", e);
+            }
+        }
+
+        function renderClients() {
+            const list = document.getElementById('clientsList');
+            if (!configData.clients || Object.keys(configData.clients).length === 0) {
+                list.innerHTML = "No clients detected.";
+                return;
+            }
+
+            let html = '';
+            for (const [name, client] of Object.entries(configData.clients)) {
+                html += `
+                    <label>
+                        <input type="checkbox" name="client" value="${name}" checked>
+                        ${name} <small>(${client.config_path})</small>
+                    </label>
+                `;
+            }
+            list.innerHTML = html;
+        }
+
+        function renderServers() {
+            const list = document.getElementById('serversList');
+            if (!configData.mcpServers || Object.keys(configData.mcpServers).length === 0) {
+                list.innerHTML = "No servers configured.";
+                return;
+            }
+
+            let html = '<ul>';
+            for (const [name, server] of Object.entries(configData.mcpServers)) {
+                let details = server.url ? `URL: ${server.url}` : `Command: ${server.command} ${server.args ? server.args.join(' ') : ''}`;
+                html += `
+                    <li style="margin-bottom: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="flex: 1; margin-right: 1rem;">
+                                <strong>${name}</strong>: ${details}
+                            </div>
+                            <div style="flex-shrink: 0;">
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="inspectServer('${name}')">🔍 Inspect</button>
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditModal('${name}')">Edit</button>
+                                <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="deleteServer('${name}')">Delete</button>
+                            </div>
+                        </div>
+                    </li>`;
+            }
+            html += '</ul>';
+            list.innerHTML = html;
+        }
+
+        function renderRegistries() {
+            const list = document.getElementById('registriesList');
+            if (!configData.registries || configData.registries.length === 0) {
+                list.innerHTML = "No registries configured.";
+                return;
+            }
+
+            let html = '<ul>';
+            configData.registries.forEach(reg => {
+                html += `
+                    <li style="margin-bottom: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div><strong>${reg.name}</strong>: ${reg.url}</div>
+                            <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="removeRegistry('${reg.name}')">Remove</button>
+                        </div>
+                    </li>`;
+            });
+            html += '</ul>';
+            list.innerHTML = html;
+        }
+
+        async function addRegistry() {
+            const name = document.getElementById('newRegName').value;
+            const url = document.getElementById('newRegUrl').value;
+
+            if (!name || !url) {
+                alert("Name and URL are required");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/registry/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, url})
+                });
+
+                if (res.ok) {
+                    document.getElementById('newRegName').value = '';
+                    document.getElementById('newRegUrl').value = '';
+
+                } else {
+                    const err = await res.text();
+                    alert("Failed to add registry: " + err);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        async function removeRegistry(name) {
+            if (!confirm(`Remove registry '${name}'?`)) return;
+
+            try {
+                const res = await fetch('/api/registry/remove', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name})
+                });
+
+                if (res.ok) {
+
+                } else {
+                    const err = await res.text();
+                    alert("Failed to remove registry: " + err);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        function openEditModal(serverID) {
+            const server = configData.mcpServers[serverID];
+            if (!server) return;
+
+            document.getElementById('editServerID').value = serverID;
+            document.getElementById('editMode').value = 'edit';
+            document.getElementById('modalTitle').innerText = `Edit ${serverID}`;
+
+            // Pretty print JSON for editing
+            document.getElementById('editConfigJSON').value = JSON.stringify(server, null, 2);
+            document.getElementById('editModal').setAttribute('open', 'true');
+        }
+
+        function openInstallModal(serverID) {
+            document.getElementById('editServerID').value = serverID;
+            document.getElementById('editMode').value = 'install';
+            document.getElementById('modalTitle').innerText = `Install ${serverID}`;
+
+            // Default install config template
+            const defaultConfig = {
+                command: "npx",
+                args: ["-y", serverID],
+                env: {}
+            };
+
+            document.getElementById('editConfigJSON').value = JSON.stringify(defaultConfig, null, 2);
+            document.getElementById('editModal').setAttribute('open', 'true');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').removeAttribute('open');
+        }
+
+        async function saveServerConfig() {
+            const serverID = document.getElementById('editServerID').value;
+            const mode = document.getElementById('editMode').value;
+            const jsonStr = document.getElementById('editConfigJSON').value;
+            let configObj;
+
+            try {
+                configObj = JSON.parse(jsonStr);
+            } catch (e) {
+                alert("Invalid JSON: " + e);
+                return;
+            }
+
+            try {
+                let url = '/api/server/update';
+                let body = {
+                    serverId: serverID,
+                    config: configObj
+                };
+
+                if (mode === 'install') {
+                    url = '/api/install';
+                    // install endpoint expects {serverId, config} structure now too
+                }
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+
+                if (res.ok) {
+                    closeEditModal();
+                    alert(mode === 'install' ? "Server installed!" : "Configuration saved!");
+                     // Refresh list
+                    if (mode === 'install') {
+                        switchTab('dashboard');
+                    }
+                } else {
+                    const err = await res.text();
+                    alert("Failed: " + err);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        async function deleteServer(serverID) {
+            if (!confirm(`Are you sure you want to delete server '${serverID}'? This cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/server/remove', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({serverId: serverID})
+                });
+
+                if (res.ok) {
+                    // alert("Server removed!"); // Optional feedback
+                     // Refresh list
+                } else {
+                    const err = await res.text();
+                    alert("Failed to delete: " + err);
+                }
+            } catch (e) {
+                alert("Error deleting server: " + e);
+            }
+        }
+
+        async function inspectServer(serverID) {
+            const server = configData.mcpServers[serverID];
+            if (!server) return;
+
+            try {
+                const res = await fetch('/api/server/inspect', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({serverId: serverID, config: server})
+                });
+
+                const data = await res.json();
+                if (data.status === 'success') {
+                    // Create a temporary modal or alert with the command
+                    // Using a prompt allows easy copying
+                    prompt(data.message, data.command);
+                } else {
+                    alert("Failed to get inspection command.");
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        async function applyConfig() {
+            const btn = document.getElementById('applyBtn');
+            const resultArea = document.getElementById('resultArea');
+            btn.setAttribute('aria-busy', 'true');
+            resultArea.innerHTML = '';
+
+            const selected = [];
+            document.querySelectorAll('input[name="client"]:checked').forEach(el => {
+                selected.push(el.value);
+            });
+
+            if (selected.length === 0) {
+                alert("Please select at least one client.");
+                btn.setAttribute('aria-busy', 'false');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/apply', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({clients: selected})
+                });
+                const data = await res.json();
+
+                let html = '<h4>Results</h4><ul>';
+                for (const res of data.results) {
+                    if (res.success) {
+                        html += `<li class="success">✅ ${res.clientName}: Success (Backup: ${res.backupPath})</li>`;
+                    } else {
+                        html += `<li class="error">❌ ${res.clientName}: Failed - ${res.error}</li>`;
+                    }
+                }
+                html += '</ul>';
+                resultArea.innerHTML = html;
+                 // Refresh lists
+
+            } catch (e) {
+                resultArea.innerHTML = `<span class="error">Request failed: ${e}</span>`;
+            } finally {
+                btn.setAttribute('aria-busy', 'false');
+            }
+        }
+
+        async function searchServers() {
+            const query = document.getElementById('searchInput').value;
+            const btn = document.getElementById('searchBtn');
+            const resultArea = document.getElementById('searchResults');
+
+            btn.setAttribute('aria-busy', 'true');
+            resultArea.innerHTML = 'Searching...';
+
+            try {
+                const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                const servers = await res.json();
+
+                if (!servers || servers.length === 0) {
+                    resultArea.innerHTML = 'No servers found.';
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>Name</th><th>Description</th><th>Action</th></tr></thead><tbody>';
+                for (const s of servers) {
+                    html += `
+                        <tr>
+                            <td><strong>${s.Name}</strong></td>
+                            <td>${s.Description}</td>
+                            <td>
+                                <button onclick="openInstallModal('${s.Name}')" class="secondary outline">Install</button>
+                                ${s.RepositoryURL ? `<a href="${s.RepositoryURL}" target="_blank" role="button" class="outline">View Repo</a>` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }
+                html += '</tbody></table>';
+                resultArea.innerHTML = html;
+
+            } catch (e) {
+                resultArea.innerHTML = `<span class="error">Search failed: ${e}</span>`;
+            } finally {
+                btn.setAttribute('aria-busy', 'false');
+            }
+        }
+
+        // Initial Load
+
+         // Load health status
+            async function restoreBackup(clientName, fileName) {
             if (!confirm(`Are you sure you want to restore '${fileName}' for ${clientName}? Current configuration will be overwritten.`)) {
                 return;
             }
@@ -41,3 +679,302 @@
         }
 
         async function importConfig() {
+            const config = document.getElementById('importJSON').value;
+            if (!config) {
+                // simple alert or toast
+                alert("Please paste a configuration.");
+                return;
+            }
+            try {
+                const res = await fetch('/api/import', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({config: config})
+                });
+
+                // check if response is ok
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message);
+                    closeImportModal();
+                    loadData();
+                } else {
+                    const txt = await res.text(); // might not be json
+                    alert("Import failed: " + txt);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        // --- Custom Clients ---
+        async function loadCustomClients() {
+            try {
+                const res = await fetch('/api/clients/custom');
+                const clients = await res.json();
+                renderCustomClients(clients);
+            } catch (e) {
+                console.error("Failed to load custom clients", e);
+            }
+        }
+
+        function renderCustomClients(clients) {
+            const list = document.getElementById('customClientsList');
+            if (!clients || clients.length === 0) {
+                list.innerHTML = "<p>No custom clients defined.</p>";
+                return;
+            }
+
+            let html = '<table><thead><tr><th>ID</th><th>Name</th><th>Path</th><th>Actions</th></tr></thead><tbody>';
+            clients.forEach(c => {
+                // Get path for current OS
+                let path = "Unknown";
+                // simple check for structure
+                if (c.Paths) {
+                    // We don't know OS in JS easily, but backend sends full struct.
+                    // Just show ID/Name for now or try to find a path
+                    // Actually, let's just list them.
+                    const paths = Object.values(c.Paths).flat();
+                    if (paths.length > 0) path = paths[0].Path;
+                }
+
+                html += `
+                    <tr>
+                        <td>${c.ID}</td>
+                        <td>${c.Name}</td>
+                        <td>${path}</td>
+                        <td>
+                            <button class="outline error small" onclick="deleteCustomClient('${c.ID}')">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+            list.innerHTML = html;
+        }
+
+        async function addCustomClient() {
+            const id = document.getElementById('newClientID').value;
+            const name = document.getElementById('newClientName').value;
+            const format = document.getElementById('newClientFormat').value;
+            const base = document.getElementById('newClientBase').value;
+            const path = document.getElementById('newClientPath').value;
+
+            if (!id || !name || !path) {
+                alert("ID, Name, and Path are required.");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/clients/custom', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        id: id,
+                        name: name,
+                        configFormat: format,
+                        baseDir: base,
+                        path: path
+                    })
+                });
+
+                if (res.ok) {
+                    alert("Client added!");
+                    loadCustomClients();
+                    loadData(); // Refresh detected clients
+                    // Clear form
+                    document.getElementById('newClientID').value = '';
+                    document.getElementById('newClientName').value = '';
+                    document.getElementById('newClientPath').value = '';
+                } else {
+                    const txt = await res.text();
+                    alert("Failed: " + txt);
+                }
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        async function deleteCustomClient(id) {
+            if (!confirm(`Delete custom client '${id}'?`)) return;
+            try {
+                const res = await fetch('/api/clients/custom', {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: id})
+                });
+                if (res.ok) {
+                    loadCustomClients();
+                    loadData();
+                } else {
+                    alert("Failed: " + await res.text());
+                }
+            } catch(e) {
+                alert("Error: " + e);
+            }
+        }
+
+        // --- Inspect Config ---
+        async function inspectClientConfig(clientID) {
+            const modal = document.getElementById('inspectClientModal');
+            const content = document.getElementById('inspectClientContent');
+            const title = document.getElementById('inspectClientTitle');
+
+            title.innerText = `Config: ${clientID}`;
+            content.innerText = "Loading...";
+            modal.setAttribute('open', 'true');
+
+            try {
+                const res = await fetch(`/api/client/config?id=${clientID}`);
+                if (res.ok) {
+                    const text = await res.text();
+                    content.innerText = text;
+                } else {
+                    content.innerText = "Error loading config: " + await res.text();
+                }
+            } catch (e) {
+                content.innerText = "Error: " + e;
+            }
+        }
+
+        function closeInspectClientModal() {
+            document.getElementById('inspectClientModal').removeAttribute('open');
+        }
+
+        // --- Backups & Logs ---
+        async function loadBackups() {
+            try {
+                const res = await fetch('/api/backups');
+                const backups = await res.json();
+                const list = document.getElementById('backupsList');
+
+                if (!backups || backups.length === 0) {
+                    list.innerHTML = "No backups found.";
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>Client</th><th>Time</th><th>File</th><th>Action</th></tr></thead><tbody>';
+                // Sort by time desc
+                backups.sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+
+                backups.forEach(b => {
+                    html += `
+                        <tr>
+                            <td>${b.ClientName}</td>
+                            <td>${new Date(b.Timestamp).toLocaleString()}</td>
+                            <td><small>${b.Filename}</small></td>
+                            <td><button class="outline small" onclick="restoreBackup('${b.ClientName}', '${b.Filename}')">Restore</button></td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table>';
+                list.innerHTML = html;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            try {
+                const res = await fetch('/api/logs');
+                const logs = await res.json();
+                container.innerText = logs.join('\n');
+                container.scrollTop = container.scrollHeight;
+            } catch (e) {
+                container.innerText = "Failed to load logs: " + e;
+            }
+        }
+
+        // --- Toast Notification ---
+        function showToast(message, type = 'info') {
+             // Simple alert for now, or implement a real toast if CSS allows
+             // The previous agent implemented showToast, let's see if it's in extra_js
+             // If not, we define a basic one.
+             const toast = document.createElement('div');
+             toast.style.position = 'fixed';
+             toast.style.bottom = '20px';
+             toast.style.right = '20px';
+             toast.style.padding = '1rem';
+             toast.style.borderRadius = '4px';
+             toast.style.color = '#fff';
+             toast.style.zIndex = '1000';
+
+             if (type === 'success') toast.style.backgroundColor = 'var(--ins-color)';
+             else if (type === 'error') toast.style.backgroundColor = 'var(--del-color)';
+             else toast.style.backgroundColor = 'var(--primary)';
+
+             toast.innerText = message;
+             document.body.appendChild(toast);
+             setTimeout(() => {
+                 toast.remove();
+             }, 3000);
+        }
+
+
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+
+            if (tabId === 'backups') loadBackups();
+            if (tabId === 'logs') loadLogs();
+            if (tabId === 'clients') loadCustomClients();
+        }
+
+
+        function renderClients() {
+            const list = document.getElementById('clientsList');
+            if (!configData.clients || Object.keys(configData.clients).length === 0) {
+                list.innerHTML = "No clients detected.";
+                return;
+            }
+
+            let html = '';
+            for (const [name, client] of Object.entries(configData.clients)) {
+                html += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--muted-border-color); padding-bottom: 0.25rem;">
+                        <label style="margin-bottom: 0; flex-grow: 1;">
+                            <input type="checkbox" name="client" value="${name}" checked>
+                            <strong>${name}</strong> <small>(${client.config_path})</small>
+                        </label>
+                        <button class="outline secondary small" style="width: auto; padding: 0.2rem 0.5rem;" onclick="inspectClientConfig('${name}')" title="View Config File">👁️</button>
+                    </div>
+                `;
+            }
+            list.innerHTML = html;
+        }
+
+loadData();
+checkDoctor();
+setInterval(loadLogs, 5000);
+</script>
+
+    <!-- Import Modal -->
+    <dialog id="importModal">
+        <article>
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeImportModal()"></a>
+                Import Configuration
+            </header>
+            <p>Paste an existing <code>mcpServers</code> JSON configuration below:</p>
+            <textarea id="importJSON" rows="10" placeholder='{"mcpServers": { ... }}'></textarea>
+            <footer>
+                <button class="secondary outline" onclick="pasteFromClipboard()">📋 Paste from Clipboard</button>
+                <button onclick="importConfig()">Import</button>
+            </footer>
+        </article>
+    </dialog>
+
+    <!-- Inspect Client Modal -->
+    <dialog id="inspectClientModal">
+        <article style="width: 80%; max-width: 1000px;">
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeInspectClientModal()"></a>
+                <span id="inspectClientTitle">Client Configuration</span>
+            </header>
+            <pre id="inspectClientContent" style="max-height: 600px; overflow: auto; background: #f4f4f4; padding: 1rem; font-family: monospace; font-size: 0.9rem; border-radius: 4px;"></pre>
+        </article>
+    </dialog>
+    </body>
+</html>

@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
+	"runtime"
 	"sync"
 
+	"github.com/tuannvm/mcpenetes/internal/client"
 	"github.com/tuannvm/mcpenetes/internal/config"
 	"github.com/tuannvm/mcpenetes/internal/core"
 	"github.com/tuannvm/mcpenetes/internal/doctor"
@@ -60,6 +63,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/restore", s.handleRestoreBackup)
 	mux.HandleFunc("/api/import", s.handleImportConfig)
 	mux.HandleFunc("/api/logs", s.handleGetLogs)
+	mux.HandleFunc("/api/clients/custom", s.handleCustomClients)
+	mux.HandleFunc("/api/client/config", s.handleGetClientConfig)
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -117,6 +122,19 @@ type RestoreRequest struct {
 
 type ImportRequest struct {
 	Config string `json:"config"`
+}
+
+type AddCustomClientRequest struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ConfigFormat string `json:"configFormat"`
+	ConfigKey    string `json:"configKey"`
+	BaseDir      string `json:"baseDir"` // "home", "appdata", "userprofile"
+	Path         string `json:"path"`    // Relative path
+}
+
+type RemoveCustomClientRequest struct {
+	ID string `json:"id"`
 }
 
 func (s *Server) handleGetData(w http.ResponseWriter, r *http.Request) {
@@ -574,4 +592,120 @@ func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	logs := log.GetRecentLogs()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)
+}
+
+func (s *Server) handleCustomClients(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.handleGetCustomClients(w, r)
+	} else if r.Method == http.MethodPost {
+		s.handleAddCustomClient(w, r)
+	} else if r.Method == http.MethodDelete {
+		s.handleRemoveCustomClient(w, r)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleGetCustomClients(w http.ResponseWriter, r *http.Request) {
+	clients, err := client.LoadCustomClients()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading clients: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(clients)
+}
+
+func (s *Server) handleAddCustomClient(w http.ResponseWriter, r *http.Request) {
+	var req AddCustomClientRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Create definition
+	def := client.ClientDefinition{
+		ID:           req.ID,
+		Name:         req.Name,
+		ConfigFormat: client.ConfigFormatEnum(req.ConfigFormat),
+		ConfigKey:    req.ConfigKey,
+		Paths: map[string][]client.PathDefinition{
+			runtime.GOOS: {
+				{Base: client.BaseDirEnum(req.BaseDir), Path: req.Path},
+			},
+		},
+	}
+
+	if err := client.AddCustomClient(def); err != nil {
+		http.Error(w, fmt.Sprintf("Error adding client: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Client added"})
+}
+
+func (s *Server) handleRemoveCustomClient(w http.ResponseWriter, r *http.Request) {
+	var req RemoveCustomClientRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := client.RemoveCustomClient(req.ID); err != nil {
+		http.Error(w, fmt.Sprintf("Error removing client: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Client removed"})
+}
+
+func (s *Server) handleGetClientConfig(w http.ResponseWriter, r *http.Request) {
+	clientID := r.URL.Query().Get("id")
+	if clientID == "" {
+		http.Error(w, "Client ID required", http.StatusBadRequest)
+		return
+	}
+
+	// To be safe, we only read configs of detected/configured clients
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, "Failed to load config", http.StatusInternalServerError)
+		return
+	}
+
+	// If client is in config, use that path
+	c, ok := cfg.Clients[clientID]
+	if !ok {
+		// Try detection
+		detected, _ := util.DetectMCPClients()
+		if d, found := detected[clientID]; found {
+			c = config.Client{ConfigPath: d.ConfigPath}
+			ok = true
+		}
+	}
+
+	if !ok {
+		http.Error(w, "Client not found or not configured", http.StatusNotFound)
+		return
+	}
+
+	expandedPath, err := util.ExpandPath(c.ConfigPath)
+	if err != nil {
+		expandedPath = c.ConfigPath
+	}
+
+	content, err := os.ReadFile(expandedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "Config file does not exist yet", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error reading file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write(content)
 }

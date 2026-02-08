@@ -1,3 +1,24 @@
+## [1.3.0](https://github.com/tuannvm/mcpenetes/compare/v1.2.0...v1.3.0) (2025-05-27)
+
+### Features
+
+* **ui:** add custom client management interface (add, delete, list).
+* **ui:** add configuration backup manager with restore capabilities.
+* **ui:** add real-time application log viewer.
+* **ui:** add comprehensive documentation and help section.
+* **ui:** add client configuration inspection (view raw config file).
+* **ui:** add import configuration modal with clipboard support.
+* **core:** implement safe custom client registry management (`clients.yaml`).
+* **core:** fix data race in logging system.
+
+## [1.2.0](https://github.com/tuannvm/mcpenetes/compare/v1.1.0...v1.2.0) (2025-05-27)
+
+### Features
+
+* **ui:** major refactor to introduce advanced web-based dashboard.
+* **ui:** add toast notifications and modal interactions.
+* **core:** refactor backup and restore logic.
+
 ## [1.1.0](https://github.com/tuannvm/mcpenetes/compare/v1.0.1...v1.1.0) (2025-05-27)
 
 ### Features

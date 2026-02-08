@@ -3,6 +3,7 @@ package log
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -26,7 +27,11 @@ type LogEntry struct {
 
 // Simple ring buffer implementation
 const BufferSize = 1000
-var logEntries = make([]LogEntry, 0, BufferSize)
+
+var (
+	logEntries = make([]LogEntry, 0, BufferSize)
+	logMutex   sync.Mutex
+)
 
 func addToBuffer(level, format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
@@ -36,6 +41,9 @@ func addToBuffer(level, format string, a ...interface{}) {
 		Message:   msg,
 	}
 
+	logMutex.Lock()
+	defer logMutex.Unlock()
+
 	if len(logEntries) >= BufferSize {
 		logEntries = logEntries[1:]
 	}
@@ -43,6 +51,8 @@ func addToBuffer(level, format string, a ...interface{}) {
 }
 
 func GetRecentLogs() []LogEntry {
+	logMutex.Lock()
+	defer logMutex.Unlock()
 	// Return copy
 	result := make([]LogEntry, len(logEntries))
 	copy(result, logEntries)
