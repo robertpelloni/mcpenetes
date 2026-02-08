@@ -31,10 +31,10 @@
                 <li><a href="#" onclick="switchTab('clients')">Clients</a></li>
                 <li><a href="#" onclick="switchTab('backups')">Backups</a></li>
                 <li><a href="#" onclick="switchTab('logs')">Logs</a></li>
+                <li><a href="#" onclick="switchTab('system')">System</a></li>
                 <li><a href="#" onclick="switchTab('help')">Help</a></li>
                 <li><a href="#" onclick="openImportModal()">Import</a></li>
-
-                <li><a href="#" onclick=" ">Refresh</a></li>
+                <li><a href="#" onclick="loadData(); checkDoctor();">Refresh</a></li>
             </ul>
         </nav>
 
@@ -142,6 +142,11 @@
                         </select>
                     </div>
                     <div>
+                        <label>Config Key (Optional)</label>
+                        <input type="text" id="newClientConfigKey" placeholder="e.g. openctx.providers">
+                        <small>Override the default JSON key (e.g. for VS Code extensions).</small>
+                    </div>
+                    <div>
                         <label>Base Directory</label>
                         <select id="newClientBase">
                             <option value="home">Home Directory (~/)</option>
@@ -181,6 +186,33 @@
         </div>
 
         <!-- Help Tab -->
+
+        <!-- System Tab -->
+        <div id="system" class="tab-content">
+            <section>
+                <h3>System Information</h3>
+                <div class="grid">
+                    <div class="card">
+                        <header>Build Info</header>
+                        <ul>
+                            <li><strong>App Version:</strong> <span id="sysAppVersion">Loading...</span></li>
+                            <li><strong>Go Version:</strong> <span id="sysGoVersion">Loading...</span></li>
+                            <li><strong>OS/Arch:</strong> <span id="sysOS">Loading...</span></li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                         <header>Submodules</header>
+                         <div id="sysSubmodules">None detected.</div>
+                    </div>
+                </div>
+                <hr>
+                <h4>Project Structure</h4>
+                <div class="card">
+                    <pre id="sysStructure" style="background:none; border:none; padding:0; margin:0;">Loading...</pre>
+                </div>
+            </section>
+        </div>
+
         <div id="help" class="tab-content">
             <section>
                 <h3>Help & Documentation</h3>
@@ -300,6 +332,31 @@
 
             } catch (e) {
                 console.error("Doctor check failed", e);
+            }
+        }
+
+
+        async function loadSystemInfo() {
+            try {
+                const res = await fetch('/api/system');
+                const data = await res.json();
+
+                document.getElementById('sysAppVersion').innerText = data.appVersion;
+                document.getElementById('sysGoVersion').innerText = data.goVersion;
+                document.getElementById('sysOS').innerText = `${data.os}/${data.arch}`;
+                document.getElementById('sysStructure').innerText = data.projectStructure.trim();
+
+                const subDiv = document.getElementById('sysSubmodules');
+                if (data.submodules && data.submodules.length > 0) {
+                    let html = '<ul>';
+                    data.submodules.forEach(s => html += `<li>${s}</li>`);
+                    html += '</ul>';
+                    subDiv.innerHTML = html;
+                } else {
+                    subDiv.innerText = "No submodules active.";
+                }
+            } catch (e) {
+                console.error("Failed to load system info", e);
             }
         }
 
@@ -757,6 +814,7 @@
             const id = document.getElementById('newClientID').value;
             const name = document.getElementById('newClientName').value;
             const format = document.getElementById('newClientFormat').value;
+            const configKey = document.getElementById('newClientConfigKey').value;
             const base = document.getElementById('newClientBase').value;
             const path = document.getElementById('newClientPath').value;
 
@@ -773,6 +831,7 @@
                         id: id,
                         name: name,
                         configFormat: format,
+                        configKey: configKey,
                         baseDir: base,
                         path: path
                     })
@@ -920,8 +979,34 @@
             if (tabId === 'backups') loadBackups();
             if (tabId === 'logs') loadLogs();
             if (tabId === 'clients') loadCustomClients();
+            if (tabId === 'system') loadSystemInfo();
         }
 
+
+
+        async function loadSystemInfo() {
+            try {
+                const res = await fetch('/api/system');
+                const data = await res.json();
+
+                document.getElementById('sysAppVersion').innerText = data.appVersion;
+                document.getElementById('sysGoVersion').innerText = data.goVersion;
+                document.getElementById('sysOS').innerText = `${data.os}/${data.arch}`;
+                document.getElementById('sysStructure').innerText = data.projectStructure.trim();
+
+                const subDiv = document.getElementById('sysSubmodules');
+                if (data.submodules && data.submodules.length > 0) {
+                    let html = '<ul>';
+                    data.submodules.forEach(s => html += `<li>${s}</li>`);
+                    html += '</ul>';
+                    subDiv.innerHTML = html;
+                } else {
+                    subDiv.innerText = "No submodules active.";
+                }
+            } catch (e) {
+                console.error("Failed to load system info", e);
+            }
+        }
 
         function renderClients() {
             const list = document.getElementById('clientsList');

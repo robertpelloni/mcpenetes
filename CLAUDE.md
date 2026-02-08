@@ -1,8 +1,12 @@
-# 🤖 Claude Instructions
+# 🤖 Claude Specific Instructions
 
-*(See `INSTRUCTIONS.md` for universal project context)*
+*(See `AGENTS.md` for universal instructions)*
 
-## Specific Instructions for Claude
-*   When editing `internal/client/registry.go`, ensure paths use `filepath.Join` and appropriate base constants (`BaseHome`, `BaseAppData`, `BaseUserProfile`).
-*   Prioritize Windows compatibility (`%APPDATA%`) in registry definitions.
-*   Use `hujson` when parsing user configuration files to avoid errors with comments.
+## Context
+You are working on **mcpenetes**, a Go-based tool for managing MCP configurations.
+
+## Directives
+*   **Code Quality:** ensuring robust error handling and type safety.
+*   **Filesystem:** Be careful with file paths. Use `filepath.Join` universally.
+*   **UI/UX:** When modifying the Web UI, ensure it is responsive (Pico.css) and user-friendly. Add tooltips and help text.
+*   **Submodules:** If any submodules are present, ensure they are initialized and updated.

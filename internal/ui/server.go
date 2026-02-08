@@ -65,6 +65,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/logs", s.handleGetLogs)
 	mux.HandleFunc("/api/clients/custom", s.handleCustomClients)
 	mux.HandleFunc("/api/client/config", s.handleGetClientConfig)
+	mux.HandleFunc("/api/system", s.handleGetSystemInfo)
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -708,4 +709,45 @@ func (s *Server) handleGetClientConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write(content)
+}
+
+type SystemInfoResponse struct {
+	AppVersion       string   `json:"appVersion"`
+	GoVersion        string   `json:"goVersion"`
+	OS               string   `json:"os"`
+	Arch             string   `json:"arch"`
+	ProjectStructure string   `json:"projectStructure"`
+	Submodules       []string `json:"submodules"` // List of submodule paths/versions
+}
+
+func (s *Server) handleGetSystemInfo(w http.ResponseWriter, r *http.Request) {
+	// Static project structure for documentation
+	structure := `
+.
+├── cmd/                # CLI commands
+├── internal/
+│   ├── client/         # Client registry & detection
+│   ├── config/         # Configuration management
+│   ├── core/           # Core logic (Backup, Restore, etc.)
+│   ├── doctor/         # System health checks
+│   ├── log/            # Logging utilities
+│   ├── ui/             # Web UI server
+│   └── version/        # Version info
+└── main.go             # Entry point
+`
+	// In a real scenario, we might shell out to git submodule status
+	// For now, returning empty list as none are checked out
+	submodules := []string{}
+
+	resp := SystemInfoResponse{
+		AppVersion:       version.Version,
+		GoVersion:        runtime.Version(),
+		OS:               runtime.GOOS,
+		Arch:             runtime.GOARCH,
+		ProjectStructure: structure,
+		Submodules:       submodules,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
