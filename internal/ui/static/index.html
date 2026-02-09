@@ -32,6 +32,7 @@
                 <li><a href="#" onclick="switchTab('backups')">Backups</a></li>
                 <li><a href="#" onclick="switchTab('logs')">Logs</a></li>
                 <li><a href="#" onclick="switchTab('system')">System</a></li>
+                <li><a href="#" onclick="switchTab('settings')">Settings</a></li>
                 <li><a href="#" onclick="switchTab('help')">Help</a></li>
                 <li><a href="#" onclick="openImportModal()">Import</a></li>
                 <li><a href="#" onclick="loadData(); checkDoctor();">Refresh</a></li>
@@ -225,6 +226,27 @@
                 <h4>Project Structure</h4>
                 <div class="card">
                     <pre id="sysStructure" style="background:none; border:none; padding:0; margin:0;">Loading...</pre>
+                </div>
+            </section>
+        </div>
+
+        <div id="settings" class="tab-content">
+            <section>
+                <h3>Global Settings</h3>
+                <div class="card">
+                    <div class="grid">
+                        <div>
+                            <label for="settingBackupPath">Backup Storage Path</label>
+                            <input type="text" id="settingBackupPath" placeholder="~/.config/mcpetes/backups">
+                            <small>Directory where configuration backups are stored.</small>
+                        </div>
+                        <div>
+                            <label for="settingBackupRetention">Retention Policy (Max Backups)</label>
+                            <input type="number" id="settingBackupRetention" placeholder="5" min="1">
+                            <small>Number of backups to keep per client. Older backups are deleted automatically.</small>
+                        </div>
+                    </div>
+                    <button onclick="saveSettings()">Save Settings</button>
                 </div>
             </section>
         </div>
@@ -1137,6 +1159,7 @@
             if (tabId === 'logs') loadLogs();
             if (tabId === 'clients') loadCustomClients();
             if (tabId === 'system') loadSystemInfo();
+            if (tabId === 'settings') loadSettings();
         }
 
 
@@ -1162,6 +1185,43 @@
                 }
             } catch (e) {
                 console.error("Failed to load system info", e);
+            }
+        }
+
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                document.getElementById('settingBackupPath').value = data.backupPath;
+                document.getElementById('settingBackupRetention').value = data.backupRetention;
+            } catch(e) {
+                showToast("Failed to load settings: " + e, 'error');
+            }
+        }
+
+        async function saveSettings() {
+            const path = document.getElementById('settingBackupPath').value;
+            const retention = parseInt(document.getElementById('settingBackupRetention').value);
+
+            if (!path || isNaN(retention) || retention < 1) {
+                alert("Invalid input");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({backupPath: path, backupRetention: retention})
+                });
+
+                if (res.ok) {
+                    showToast("Settings saved!", 'success');
+                } else {
+                    showToast("Failed to save: " + await res.text(), 'error');
+                }
+            } catch(e) {
+                showToast("Error: " + e, 'error');
             }
         }
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -104,9 +105,96 @@ func (t *Translator) BackupClientConfig(clientName string, clientConf config.Cli
 
 	fmt.Printf("  Backed up '%s' to '%s'\n", clientConfigPath, backupFilePath)
 
-	// TODO: Implement backup retention logic here or separately
+	// Enforce retention policy
+	if err := t.enforceRetention(clientName); err != nil {
+		fmt.Printf("Warning: Failed to enforce backup retention for %s: %v\n", clientName, err)
+	}
 
 	return backupFilePath, nil
+}
+
+// enforceRetention deletes old backups for a client if they exceed the retention limit
+func (t *Translator) enforceRetention(clientName string) error {
+	limit := t.AppConfig.Backups.Retention
+	if limit <= 0 {
+		limit = 5 // Default retention
+	}
+
+	backupDir := t.getBackupDir(clientName)
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		return err
+	}
+
+	var clientBackups []os.DirEntry
+	prefix := clientName + "-"
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) {
+			clientBackups = append(clientBackups, entry)
+		}
+	}
+
+	// If count is within limit, do nothing
+	if len(clientBackups) <= limit {
+		return nil
+	}
+
+	// Helper to get modification time or parse filename
+	getTime := func(entry os.DirEntry) time.Time {
+		// Try parsing filename first: name-YYYYMMDD-HHMMSS.ext
+		name := entry.Name()
+		ext := filepath.Ext(name)
+		nameNoExt := strings.TrimSuffix(name, ext)
+		if len(nameNoExt) > 15 {
+			tsStr := nameNoExt[len(nameNoExt)-15:]
+			if ts, err := time.Parse("20060102-150405", tsStr); err == nil {
+				return ts
+			}
+		}
+		info, err := entry.Info()
+		if err == nil {
+			return info.ModTime()
+		}
+		return time.Time{}
+	}
+
+	// Sort backups by time (newest first)
+	// We want to keep the 'limit' newest ones, delete the rest
+	// So we need to identify the oldest ones.
+	// Let's sort descending (newest first)
+	// Actually, just sorting logic needs to be consistent.
+
+	// Quick sort implementation
+	// We need to import "sort" if not available, but it is not imported yet.
+	// Let's rely on modification time from DirEntry if possible, or just file names if timestamped.
+	// Since filenames are timestamped YYYYMMDD-HHMMSS, alphabetical order is chronological.
+	// So newest is last in alphabetical sort.
+
+	// Sort alphabetical ascending (Oldest -> Newest)
+	// clientBackups are likely already sorted by ReadDir (by name), but not guaranteed on all OS.
+	// Let's assume name sorting is sufficient due to YYYYMMDD-HHMMSS format.
+
+	// If we have N files, and we want to keep Limit.
+	// We delete the first (N - Limit) files in the sorted list.
+
+	// Sort by timestamp descending (newest first)
+	sort.Slice(clientBackups, func(i, j int) bool {
+		return getTime(clientBackups[i]).After(getTime(clientBackups[j]))
+	})
+
+	// Delete backups beyond the limit
+	// We want to keep [0...limit-1]
+	for i := limit; i < len(clientBackups); i++ {
+		entry := clientBackups[i]
+		path := filepath.Join(backupDir, entry.Name())
+		fmt.Printf("  Retention: deleting old backup '%s'\n", path)
+		if err := os.Remove(path); err != nil {
+			// Log error but continue deleting others
+			fmt.Printf("Warning: failed to delete old backup '%s': %v\n", path, err)
+		}
+	}
+
+	return nil
 }
 
 // DeleteBackup removes a specific backup file

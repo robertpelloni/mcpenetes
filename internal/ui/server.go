@@ -68,6 +68,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/clients/known", s.handleGetKnownClients)
 	mux.HandleFunc("/api/client/config", s.handleGetClientConfig)
 	mux.HandleFunc("/api/system", s.handleGetSystemInfo)
+	mux.HandleFunc("/api/settings", s.handleSettings)
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -145,6 +146,11 @@ type RemoveCustomClientRequest struct {
 	ID string `json:"id"`
 }
 
+type SettingsRequest struct {
+	BackupPath      string `json:"backupPath"`
+	BackupRetention int    `json:"backupRetention"`
+}
+
 func (s *Server) handleGetData(w http.ResponseWriter, r *http.Request) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -175,6 +181,60 @@ func (s *Server) handleGetData(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.handleGetSettings(w, r)
+	} else if r.Method == http.MethodPost {
+		s.handleUpdateSettings(w, r)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(SettingsRequest{
+		BackupPath:      cfg.Backups.Path,
+		BackupRetention: cfg.Backups.Retention,
+	})
+}
+
+func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	var req SettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Update fields
+	if req.BackupPath != "" {
+		cfg.Backups.Path = req.BackupPath
+	}
+	if req.BackupRetention >= 0 {
+		cfg.Backups.Retention = req.BackupRetention
+	}
+
+	if err := config.SaveConfig(cfg); err != nil {
+		http.Error(w, fmt.Sprintf("Error saving config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Settings updated"})
 }
 
 func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {

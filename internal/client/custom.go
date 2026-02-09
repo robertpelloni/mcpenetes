@@ -17,7 +17,7 @@ func GetCustomRegistryPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	configDir := filepath.Join(homeDir, ".config", "mcpenetes")
+	configDir := filepath.Join(homeDir, ".config", "mcpetes")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", err
 	}
