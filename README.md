@@ -20,6 +20,7 @@ Think of mcpenetes as your friendly neighborhood wizard who can:
 - 💾 Backup your configurations before making any changes
 - 🛡️ Restore configurations if something goes wrong
 - 🏥 Diagnose system health with the `doctor` command
+- 🧩 **New!** Define and manage custom clients directly from the UI
 
 ## 🚀 Installation
 
@@ -70,13 +71,16 @@ That's it! Your MCP configurations are now synced across all clients. Magic! ✨
 
 ### 🖥️ Web UI Dashboard
 
-The Web UI provides a visual interface for managing your MCP ecosystem:
+The Web UI provides a comprehensive visual interface for managing your entire MCP ecosystem:
 
-*   **Dashboard**: View detected clients and configured servers. Inspect server commands, edit configurations, or delete servers.
-*   **Search & Install**: Find new servers from configured registries and install them with one click.
-*   **Backups**: View a history of configuration backups for each client and restore them if needed.
+*   **Dashboard**: View detected clients and configured servers. Inspect server commands, edit configurations (JSON), or delete servers.
+*   **Search & Install**: Find new servers from configured registries (cached for speed) and install them with one click.
+*   **Clients**: **New!** Add support for custom tools that aren't built-in. Define the config format (`mcpServers`, VS Code, etc.), path, and base directory.
+*   **Registries**: Add, **Edit**, and Remove your MCP server registries.
+*   **Backups**: View a history of configuration backups for each client. **Restore** previous states or **Delete** old backups to save space.
+*   **Logs**: Monitor application logs in real-time. **Filter** logs by keyword or **Clear** them when needed.
+*   **System**: Check **System Health (Doctor)** status, view build information, and inspect project structure and submodules.
 *   **Import Config**: Easily import an existing `mcpServers` JSON configuration by pasting it into the UI.
-*   **Registries**: Manage your MCP server sources.
 *   **Help**: Built-in documentation and troubleshooting guides.
 
 ### 🛠️ Available Commands
@@ -172,7 +176,7 @@ mcpenetes automatically detects and configures over 30 MCP-compatible clients, i
 *   Warp Terminal
 
 ### Adding Custom Clients
-You can support additional tools by creating a `clients.yaml` file in your config directory (e.g., `~/.config/mcpetes/clients.yaml`).
+You can support additional tools by creating a `clients.yaml` file in your config directory (e.g., `~/.config/mcpetes/clients.yaml`) or by using the **Clients** tab in the Web UI.
 
 ## 📁 Configuration Files
 
@@ -180,6 +184,7 @@ mcpenetes uses the following configuration files:
 
 - `~/.config/mcpetes/config.yaml`: Stores global configuration, including registered registries and selected MCP servers
 - `~/.config/mcpetes/mcp.json`: Stores the MCP server configurations
+- `~/.config/mcpetes/clients.yaml`: Stores custom client definitions
 - `~/.config/mcpetes/cache/`: Caches registry responses for faster access
 
 ## 🤝 Contributing

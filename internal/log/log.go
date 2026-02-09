@@ -59,6 +59,12 @@ func GetRecentLogs() []LogEntry {
 	return result
 }
 
+func ClearLogs() {
+	logMutex.Lock()
+	defer logMutex.Unlock()
+	logEntries = make([]LogEntry, 0, BufferSize)
+}
+
 // Info prints an informational message (cyan).
 func Info(format string, a ...interface{}) {
 	addToBuffer("INFO", format, a...)

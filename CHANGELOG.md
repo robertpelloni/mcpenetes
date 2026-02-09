@@ -1,3 +1,14 @@
+## [1.3.2](https://github.com/tuannvm/mcpenetes/compare/v1.3.1...v1.3.2) (2025-05-27)
+
+### Features
+
+* **ui:** add ability to delete configuration backups.
+* **ui:** add ability to clear and filter application logs.
+* **ui:** add ability to edit existing registry URLs.
+* **ui:** consolidate system health ("Doctor") into the System tab.
+* **core:** implement backend logic for removing backups and clearing logs.
+* **core:** implement registry update logic.
+
 ## [1.3.1](https://github.com/tuannvm/mcpenetes/compare/v1.3.0...v1.3.1) (2025-05-27)
 
 ### Features

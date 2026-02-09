@@ -38,14 +38,6 @@
             </ul>
         </nav>
 
-        <!-- Doctor Status Banner -->
-        <div id="doctorBanner" style="display:none; margin-bottom: 1rem; padding: 0.5rem; border-radius: var(--border-radius); background-color: var(--card-background-color); border: 1px solid var(--muted-border-color);">
-            <details>
-                <summary id="doctorSummary">System Status: Checking...</summary>
-                <ul id="doctorList" style="margin-top: 0.5rem;"></ul>
-            </details>
-        </div>
-
         <!-- Dashboard Tab -->
         <div id="dashboard" class="tab-content active">
             <div class="grid">
@@ -177,7 +169,15 @@
         <!-- Logs Tab -->
         <div id="logs" class="tab-content">
             <section>
-                <h3>Application Logs</h3>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Application Logs</h3>
+                    <div>
+                        <input type="text" id="logFilter" placeholder="Filter logs..." onkeyup="filterLogs()" style="display: inline-block; width: auto; margin-right: 0.5rem;" title="Type to filter log messages">
+                        <button onclick="clearLogs()" class="outline error" title="Clear all application logs">Clear Logs</button>
+                    </div>
+                </div>
+
                 <div class="card" style="background: #1e1e1e; color: #d4d4d4; padding: 1rem; height: 500px; overflow-y: auto; font-family: monospace; white-space: pre-wrap;" id="logsContainer">
                     Loading logs...
                 </div>
@@ -188,7 +188,15 @@
         <!-- Help Tab -->
 
         <!-- System Tab -->
+
         <div id="system" class="tab-content">
+            <section>
+                <h3>System Health (Doctor)</h3>
+                <div class="card" id="systemDoctorReport">
+                    Checking health...
+                </div>
+            </section>
+
             <section>
                 <h3>System Information</h3>
                 <div class="grid">
@@ -218,26 +226,43 @@
                 <h3>Help & Documentation</h3>
                 <article>
                     <h4>🚀 Getting Started</h4>
-                    <p><strong>mcpenetes</strong> helps you manage your MCP servers across multiple clients.</p>
+                    <p><strong>mcpenetes</strong> is your central hub for managing Model Context Protocol (MCP) servers across all your development tools.</p>
                     <ul>
-                        <li><strong>Dashboard:</strong> View detected clients and configured servers. Apply configurations here.</li>
-                        <li><strong>Search:</strong> Find new MCP servers from registries and install them.</li>
-                        <li><strong>Clients:</strong> Add support for custom tools that aren't built-in.</li>
+                        <li><strong>Dashboard:</strong> The command center. View detected clients, configured servers, and apply your MCP setup.</li>
+                        <li><strong>Search:</strong> Discover and install new MCP servers from configured registries.</li>
+                        <li><strong>Clients:</strong> Define custom tools if they aren't automatically detected.</li>
                     </ul>
 
                     <h4>🛠️ Managing Custom Clients</h4>
-                    <p>If your tool isn't detected automatically, you can add it in the <strong>Clients</strong> tab.</p>
-                    <p>You'll need to know:</p>
+                    <p>Use the <strong>Clients</strong> tab to add support for any tool that reads a configuration file.</p>
+                    <p>You'll need:</p>
                     <ul>
-                        <li><strong>Config Format:</strong> Does it use <code>mcpServers</code> (Simple JSON) or VS Code style settings?</li>
-                        <li><strong>Path:</strong> Where the config file is located relative to your home or config directory.</li>
+                        <li><strong>Config Format:</strong> Select the format the tool expects (e.g., Simple JSON <code>mcpServers</code> or VS Code style).</li>
+                        <li><strong>Path:</strong> The relative path to the configuration file (e.g., <code>.config/mytool/config.json</code>).</li>
                     </ul>
 
-                    <h4>🔍 Inspecting Configurations</h4>
-                    <p>Click the <strong>👁️</strong> icon next to a client in the Dashboard to view its actual configuration file content. This is useful for debugging.</p>
+                    <h4>🔍 Inspecting & Debugging</h4>
+                    <p><strong>Inspect Config:</strong> Click the <strong>👁️</strong> icon next to a client in the Dashboard to see exactly what is being written to its config file.</p>
+                    <p><strong>Inspect Server:</strong> Click <strong>🔍 Inspect</strong> on a server to get the command for running the MCP Inspector on it.</p>
+                    <p><strong>Logs:</strong> Use the <strong>Logs</strong> tab to view real-time application logs. You can filter by keyword or clear them if they get too noisy.</p>
 
-                    <h4>💾 Backups</h4>
-                    <p>Every time you apply a configuration, a backup is created. You can restore them from the <strong>Backups</strong> tab.</p>
+                    <h4>📦 Registries</h4>
+                    <p>Manage your sources for MCP servers in the <strong>Registries</strong> tab. You can add new URLs, edit existing ones, or remove them.</p>
+
+                    <h4>💾 Backups & Restoration</h4>
+                    <p>Safety first! Every time you apply a configuration, a backup is created automatically.</p>
+                    <ul>
+                        <li><strong>Restore:</strong> Go to the <strong>Backups</strong> tab and click "Restore" on any entry to revert to that state.</li>
+                        <li><strong>Cleanup:</strong> Click "Delete" to remove old backups and free up space.</li>
+                    </ul>
+
+                    <h4>🏥 System Health</h4>
+                    <p>Check the <strong>System</strong> tab to run the "Doctor" diagnostic tool. It checks for:</p>
+                    <ul>
+                        <li>Configuration file integrity</li>
+                        <li>Required system dependencies (Node, Python, etc.)</li>
+                        <li>Write permissions for client configuration paths</li>
+                    </ul>
                 </article>
             </section>
         </div>
@@ -291,93 +316,6 @@
             }
         }
 
-        async function checkDoctor() {
-            try {
-                const res = await fetch('/api/doctor');
-                const results = await res.json();
-
-                const banner = document.getElementById('doctorBanner');
-                const summary = document.getElementById('doctorSummary');
-                const list = document.getElementById('doctorList');
-
-                banner.style.display = 'block';
-                list.innerHTML = '';
-
-                let errorCount = 0;
-                let warningCount = 0;
-
-                results.forEach(r => {
-                    let icon = '✅';
-                    let cls = 'success';
-                    if (r.status === 'error') {
-                        icon = '❌';
-                        cls = 'error';
-                        errorCount++;
-                    } else if (r.status === 'warning') {
-                        icon = '⚠️';
-                        cls = 'warning';
-                        warningCount++;
-                    }
-
-                    list.innerHTML += `<li class="${cls}">${icon} <strong>${r.name}</strong>: ${r.message}</li>`;
-                });
-
-                if (errorCount > 0) {
-                    summary.innerHTML = `System Status: <span class="error">❌ ${errorCount} Errors</span>, <span class="warning">${warningCount} Warnings</span>`;
-                } else if (warningCount > 0) {
-                    summary.innerHTML = `System Status: <span class="warning">⚠️ ${warningCount} Warnings</span>`;
-                } else {
-                    summary.innerHTML = `System Status: <span class="success">✅ All Systems Operational</span>`;
-                }
-
-            } catch (e) {
-                console.error("Doctor check failed", e);
-            }
-        }
-
-
-        async function loadSystemInfo() {
-            try {
-                const res = await fetch('/api/system');
-                const data = await res.json();
-
-                document.getElementById('sysAppVersion').innerText = data.appVersion;
-                document.getElementById('sysGoVersion').innerText = data.goVersion;
-                document.getElementById('sysOS').innerText = `${data.os}/${data.arch}`;
-                document.getElementById('sysStructure').innerText = data.projectStructure.trim();
-
-                const subDiv = document.getElementById('sysSubmodules');
-                if (data.submodules && data.submodules.length > 0) {
-                    let html = '<ul>';
-                    data.submodules.forEach(s => html += `<li>${s}</li>`);
-                    html += '</ul>';
-                    subDiv.innerHTML = html;
-                } else {
-                    subDiv.innerText = "No submodules active.";
-                }
-            } catch (e) {
-                console.error("Failed to load system info", e);
-            }
-        }
-
-        function renderClients() {
-            const list = document.getElementById('clientsList');
-            if (!configData.clients || Object.keys(configData.clients).length === 0) {
-                list.innerHTML = "No clients detected.";
-                return;
-            }
-
-            let html = '';
-            for (const [name, client] of Object.entries(configData.clients)) {
-                html += `
-                    <label>
-                        <input type="checkbox" name="client" value="${name}" checked>
-                        ${name} <small>(${client.config_path})</small>
-                    </label>
-                `;
-            }
-            list.innerHTML = html;
-        }
 
         function renderServers() {
             const list = document.getElementById('serversList');
@@ -396,9 +334,9 @@
                                 <strong>${name}</strong>: ${details}
                             </div>
                             <div style="flex-shrink: 0;">
-                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="inspectServer('${name}')">🔍 Inspect</button>
-                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditModal('${name}')">Edit</button>
-                                <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="deleteServer('${name}')">Delete</button>
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="inspectServer('${name}')" title="View the command to run this server manually">🔍 Inspect</button>
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditModal('${name}')" title="Edit server configuration (JSON)">Edit</button>
+                                <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="deleteServer('${name}')" title="Remove this server from configuration">Delete</button>
                             </div>
                         </div>
                     </li>`;
@@ -420,7 +358,10 @@
                     <li style="margin-bottom: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div><strong>${reg.name}</strong>: ${reg.url}</div>
-                            <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="removeRegistry('${reg.name}')">Remove</button>
+
+                            <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditRegistryModal('${reg.name}', '${reg.url}')" title="Edit registry URL">Edit</button>
+                            <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="removeRegistry('${reg.name}')" title="Remove this registry source">Remove</button>
+
                         </div>
                     </li>`;
             });
@@ -455,6 +396,37 @@
             } catch (e) {
                 alert("Error: " + e);
             }
+        }
+
+
+        function openEditRegistryModal(name, url) {
+            document.getElementById('editRegName').value = name;
+            document.getElementById('editRegUrl').value = url;
+            document.getElementById('editRegistryModal').setAttribute('open', 'true');
+        }
+
+        function closeEditRegistryModal() {
+            document.getElementById('editRegistryModal').removeAttribute('open');
+        }
+
+        async function saveRegistryUpdate() {
+            const name = document.getElementById('editRegName').value;
+            const url = document.getElementById('editRegUrl').value;
+
+            try {
+                const res = await fetch('/api/registry/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, url})
+                });
+                if (res.ok) {
+                    closeEditRegistryModal();
+                    loadData();
+                    showToast("Registry updated", 'success');
+                } else {
+                    showToast("Failed: " + await res.text(), 'error');
+                }
+            } catch (e) { showToast("Error: " + e, 'error'); }
         }
 
         async function removeRegistry(name) {
@@ -693,7 +665,26 @@
         // Initial Load
 
          // Load health status
-            async function restoreBackup(clientName, fileName) {
+
+        async function deleteBackup(clientName, fileName) {
+            if (!confirm(`Delete backup '${fileName}' for ${clientName}?`)) return;
+            try {
+                const res = await fetch('/api/restore', { // using restore endpoint with DELETE method
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({client: clientName, file: fileName})
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message, 'success');
+                    loadBackups();
+                } else {
+                    showToast("Failed: " + data.message, 'error');
+                }
+            } catch (e) { showToast("Error: " + e, 'error'); }
+        }
+
+        async function restoreBackup(clientName, fileName) {
             if (!confirm(`Are you sure you want to restore '${fileName}' for ${clientName}? Current configuration will be overwritten.`)) {
                 return;
             }
@@ -801,7 +792,7 @@
                         <td>${c.Name}</td>
                         <td>${path}</td>
                         <td>
-                            <button class="outline error small" onclick="deleteCustomClient('${c.ID}')">Delete</button>
+                            <button class="outline error small" onclick="deleteCustomClient('${c.ID}')" title="Remove this custom client definition">Delete</button>
                         </td>
                     </tr>
                 `;
@@ -904,25 +895,46 @@
         async function loadBackups() {
             try {
                 const res = await fetch('/api/backups');
-                const backups = await res.json();
+                const backupsMap = await res.json();
                 const list = document.getElementById('backupsList');
 
-                if (!backups || backups.length === 0) {
+                if (!backupsMap || Object.keys(backupsMap).length === 0) {
+                    list.innerHTML = "No backups found.";
+                    return;
+                }
+
+                let allBackups = [];
+                for (const [clientName, files] of Object.entries(backupsMap)) {
+                    if (Array.isArray(files)) {
+                        files.forEach(f => {
+                             allBackups.push({
+                                 ClientName: clientName,
+                                 Timestamp: f.timestamp,
+                                 Filename: f.name
+                             });
+                        });
+                    }
+                }
+
+                if (allBackups.length === 0) {
                     list.innerHTML = "No backups found.";
                     return;
                 }
 
                 let html = '<table><thead><tr><th>Client</th><th>Time</th><th>File</th><th>Action</th></tr></thead><tbody>';
                 // Sort by time desc
-                backups.sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+                allBackups.sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
 
-                backups.forEach(b => {
+                allBackups.forEach(b => {
                     html += `
                         <tr>
                             <td>${b.ClientName}</td>
                             <td>${new Date(b.Timestamp).toLocaleString()}</td>
                             <td><small>${b.Filename}</small></td>
-                            <td><button class="outline small" onclick="restoreBackup('${b.ClientName}', '${b.Filename}')">Restore</button></td>
+                            <td>
+                                <button class="outline small" onclick="restoreBackup('${b.ClientName}', '${b.Filename}')" title="Restore this configuration state">Restore</button>
+                                <button class="outline small error" onclick="deleteBackup('${b.ClientName}', '${b.Filename}')" title="Permanently delete this backup file">Delete</button>
+                            </td>
                         </tr>
                     `;
                 });
@@ -930,7 +942,31 @@
                 list.innerHTML = html;
             } catch (e) {
                 console.error(e);
+                list.innerHTML = `<span class="error">Error loading backups: ${e}</span>`;
             }
+        }
+
+
+        let allLogs = [];
+        async function clearLogs() {
+            if (!confirm("Clear all application logs?")) return;
+            try {
+                await fetch('/api/logs', { method: 'DELETE' });
+                loadLogs();
+            } catch(e) { console.error(e); }
+        }
+
+        function filterLogs() {
+            const query = document.getElementById('logFilter').value.toLowerCase();
+            const container = document.getElementById('logsContainer');
+            if (!query) {
+                container.innerText = allLogs.map(l => `[${l.level}] ${l.message}`).join('\n');
+                return;
+            }
+            const filtered = allLogs.filter(l =>
+                l.message.toLowerCase().includes(query) || l.level.toLowerCase().includes(query)
+            );
+            container.innerText = filtered.map(l => `[${l.level}] ${l.message}`).join('\n');
         }
 
         async function loadLogs() {
@@ -938,7 +974,8 @@
             try {
                 const res = await fetch('/api/logs');
                 const logs = await res.json();
-                container.innerText = logs.join('\n');
+                allLogs = logs;
+                filterLogs(); // Display with current filter
                 container.scrollTop = container.scrollHeight;
             } catch (e) {
                 container.innerText = "Failed to load logs: " + e;
@@ -1033,6 +1070,32 @@
 loadData();
 checkDoctor();
 setInterval(loadLogs, 5000);
+
+        async function checkDoctor() {
+            try {
+                const res = await fetch('/api/doctor');
+                const results = await res.json();
+
+                const container = document.getElementById('systemDoctorReport');
+                if (!container) return; // fail safe
+
+                let html = '<ul style="margin:0; padding-left:1rem;">';
+                results.forEach(r => {
+                    let icon = '✅';
+                    let color = 'var(--ins-color)';
+                    if (r.status === 'error') { icon = '❌'; color = 'var(--del-color)'; }
+                    else if (r.status === 'warning') { icon = '⚠️'; color = 'var(--pico-color-amber-500)'; }
+
+                    html += `<li style="color:${color}; list-style:none;">${icon} <strong>${r.name}</strong>: ${r.message}</li>`;
+                });
+                html += '</ul>';
+                container.innerHTML = html;
+
+            } catch (e) {
+                console.error("Doctor check failed", e);
+            }
+        }
+
 </script>
 
     <!-- Import Modal -->
@@ -1061,5 +1124,23 @@ setInterval(loadLogs, 5000);
             <pre id="inspectClientContent" style="max-height: 600px; overflow: auto; background: #f4f4f4; padding: 1rem; font-family: monospace; font-size: 0.9rem; border-radius: 4px;"></pre>
         </article>
     </dialog>
-    </body>
+
+    <dialog id="editRegistryModal">
+        <article>
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeEditRegistryModal()"></a>
+                Edit Registry
+            </header>
+            <label>Name</label>
+            <input type="text" id="editRegName" readonly>
+            <label>URL</label>
+            <input type="url" id="editRegUrl">
+            <footer>
+                <button class="secondary outline" onclick="closeEditRegistryModal()">Cancel</button>
+                <button onclick="saveRegistryUpdate()">Save</button>
+            </footer>
+        </article>
+    </dialog>
+
+</body>
 </html>

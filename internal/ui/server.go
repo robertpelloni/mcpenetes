@@ -57,12 +57,13 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/server/remove", s.handleRemoveServer)
 	mux.HandleFunc("/api/doctor", s.handleDoctor)
 	mux.HandleFunc("/api/registry/add", s.handleAddRegistry)
+	mux.HandleFunc("/api/registry/update", s.handleUpdateRegistry)
 	mux.HandleFunc("/api/registry/remove", s.handleRemoveRegistry)
 	mux.HandleFunc("/api/server/inspect", s.handleInspectServer)
 	mux.HandleFunc("/api/backups", s.handleGetBackups)
 	mux.HandleFunc("/api/restore", s.handleRestoreBackup)
 	mux.HandleFunc("/api/import", s.handleImportConfig)
-	mux.HandleFunc("/api/logs", s.handleGetLogs)
+	mux.HandleFunc("/api/logs", s.handleLogs)
 	mux.HandleFunc("/api/clients/custom", s.handleCustomClients)
 	mux.HandleFunc("/api/client/config", s.handleGetClientConfig)
 	mux.HandleFunc("/api/system", s.handleGetSystemInfo)
@@ -99,6 +100,11 @@ type RemoveServerRequest struct {
 }
 
 type AddRegistryRequest struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type UpdateRegistryRequest struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
 }
@@ -431,6 +437,32 @@ func (s *Server) handleAddRegistry(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Registry added"})
 }
 
+func (s *Server) handleUpdateRegistry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req UpdateRegistryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" || req.URL == "" {
+		http.Error(w, "Name and URL are required", http.StatusBadRequest)
+		return
+	}
+
+	if err := manager.UpdateRegistry(req.Name, req.URL); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to update registry: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Registry updated"})
+}
+
 func (s *Server) handleRemoveRegistry(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -512,6 +544,11 @@ func (s *Server) handleGetBackups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		s.handleDeleteBackup(w, r)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -544,6 +581,29 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": fmt.Sprintf("Restored backup for %s", req.ClientName)})
+}
+
+func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
+	var req RestoreRequest // reuse struct: client, file
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading config: %v", err), http.StatusInternalServerError)
+		return
+	}
+	manager := core.NewManager(cfg, &config.MCPConfig{})
+
+	if err := manager.RemoveBackup(req.ClientName, req.BackupFile); err != nil {
+		http.Error(w, fmt.Sprintf("Error deleting backup: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Backup deleted"})
 }
 
 func (s *Server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
@@ -589,7 +649,13 @@ func (s *Server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		log.ClearLogs()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Logs cleared"})
+		return
+	}
 	logs := log.GetRecentLogs()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)

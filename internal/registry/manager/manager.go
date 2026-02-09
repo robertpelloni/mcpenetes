@@ -10,16 +10,13 @@ import (
 func AddRegistry(name, url string) error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
-	// Check for duplicates
+	// Check if already exists
 	for _, reg := range cfg.Registries {
 		if reg.Name == name {
-			return fmt.Errorf("registry with name '%s' already exists", name)
-		}
-		if reg.URL == url {
-			return fmt.Errorf("registry with URL '%s' already exists", url)
+			return fmt.Errorf("registry '%s' already exists", name)
 		}
 	}
 
@@ -28,18 +25,14 @@ func AddRegistry(name, url string) error {
 		URL:  url,
 	})
 
-	if err := config.SaveConfig(cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	return nil
+	return config.SaveConfig(cfg)
 }
 
 // RemoveRegistry removes a registry from the configuration
 func RemoveRegistry(name string) error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	found := false
@@ -57,10 +50,28 @@ func RemoveRegistry(name string) error {
 	}
 
 	cfg.Registries = newRegistries
+	return config.SaveConfig(cfg)
+}
 
-	if err := config.SaveConfig(cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
+// UpdateRegistry updates an existing registry's URL
+func UpdateRegistry(name, newURL string) error {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return err
 	}
 
-	return nil
+	found := false
+	for i, reg := range cfg.Registries {
+		if reg.Name == name {
+			cfg.Registries[i].URL = newURL
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("registry '%s' not found", name)
+	}
+
+	return config.SaveConfig(cfg)
 }

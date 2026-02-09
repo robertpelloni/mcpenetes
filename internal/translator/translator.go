@@ -32,6 +32,17 @@ func NewTranslator(appCfg *config.Config, mcpCfg *config.MCPConfig) *Translator 
 	}
 }
 
+// getBackupDir returns the backup directory for a client (internal helper)
+func (t *Translator) getBackupDir(clientName string) string {
+	// For now, it seems all backups go to a single configured path
+	// But `DeleteBackup` implementation implied getting it.
+	// Re-implementing logic from BackupClientConfig
+
+	// Assuming t.AppConfig.Backups.Path is the root
+	path, _ := util.ExpandPath(t.AppConfig.Backups.Path)
+	return path
+}
+
 // BackupClientConfig creates a timestamped backup of a client's configuration file.
 func (t *Translator) BackupClientConfig(clientName string, clientConf config.Client) (string, error) {
 	backupDir, err := util.ExpandPath(t.AppConfig.Backups.Path)
@@ -96,6 +107,19 @@ func (t *Translator) BackupClientConfig(clientName string, clientConf config.Cli
 	// TODO: Implement backup retention logic here or separately
 
 	return backupFilePath, nil
+}
+
+// DeleteBackup removes a specific backup file
+func (t *Translator) DeleteBackup(clientName, filename string) error {
+	backupDir := t.getBackupDir(clientName)
+	path := filepath.Join(backupDir, filename)
+
+	// Security check: ensure path is within backup dir
+	if filepath.Dir(path) != backupDir {
+		return fmt.Errorf("invalid backup path")
+	}
+
+	return os.Remove(path)
 }
 
 // TranslateAndApply translates the selected MCP config and writes it to the client's path.
