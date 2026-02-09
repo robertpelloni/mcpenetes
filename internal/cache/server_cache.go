@@ -9,9 +9,12 @@ import (
 
 // ServerInfo represents information about an MCP server to be cached
 type ServerInfo struct {
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	RepositoryURL string `json:"repositoryUrl"`
+	Name          string      `json:"name"`
+	Description   string      `json:"description"`
+	RepositoryURL string      `json:"repositoryUrl"`
+	Tools         int         `json:"tools,omitempty"`
+	Attributes    []string    `json:"attributes,omitempty"`
+	EnvSchema     interface{} `json:"envSchema,omitempty"`
 }
 
 // ServerCacheEntry represents the structure of server data stored in a cache file

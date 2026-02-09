@@ -65,6 +65,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/import", s.handleImportConfig)
 	mux.HandleFunc("/api/logs", s.handleLogs)
 	mux.HandleFunc("/api/clients/custom", s.handleCustomClients)
+	mux.HandleFunc("/api/clients/known", s.handleGetKnownClients)
 	mux.HandleFunc("/api/client/config", s.handleGetClientConfig)
 	mux.HandleFunc("/api/system", s.handleGetSystemInfo)
 
@@ -295,6 +296,18 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	} else {
 		for _, s := range allServers {
 			if util.CaseInsensitiveContains(s.Name, query) || util.CaseInsensitiveContains(s.Description, query) {
+				filtered = append(filtered, s)
+				continue
+			}
+			// Search in attributes/tags
+			foundTag := false
+			for _, tag := range s.Attributes {
+				if util.CaseInsensitiveContains(tag, query) {
+					foundTag = true
+					break
+				}
+			}
+			if foundTag {
 				filtered = append(filtered, s)
 			}
 		}
@@ -681,6 +694,13 @@ func (s *Server) handleGetCustomClients(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(clients)
+}
+
+func (s *Server) handleGetKnownClients(w http.ResponseWriter, r *http.Request) {
+	// Return the static registry definitions
+	// We might want to filter or process them, but raw is fine for now
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(client.Registry)
 }
 
 func (s *Server) handleAddCustomClient(w http.ResponseWriter, r *http.Request) {

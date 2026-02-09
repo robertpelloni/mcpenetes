@@ -55,6 +55,9 @@ type ServerData struct {
 	Name          string
 	Description   string
 	RepositoryURL string
+	Tools         int
+	Attributes    []string
+	EnvSchema     interface{}
 }
 
 // FetchMCPList fetches the list of available MCP versions from a given registry URL.
@@ -226,6 +229,9 @@ func FetchMCPServersWithCache(registryURL string, forceRefresh bool) ([]ServerDa
 					Name:          s.Name,
 					Description:   s.Description,
 					RepositoryURL: s.RepositoryURL,
+				Tools:         s.Tools,
+				Attributes:    s.Attributes,
+				EnvSchema:     s.EnvSchema,
 				}
 			}
 			return servers, nil
@@ -248,6 +254,9 @@ func FetchMCPServersWithCache(registryURL string, forceRefresh bool) ([]ServerDa
 			Name:          s.Name,
 			Description:   s.Description,
 			RepositoryURL: s.RepositoryURL,
+			Tools:         s.Tools,
+			Attributes:    s.Attributes,
+			EnvSchema:     s.EnvSchema,
 		}
 	}
 	
@@ -395,6 +404,9 @@ func FetchMCPServers(url string) ([]ServerData, error) {
 					Name:          server.Name,
 					Description:   server.Description,
 					RepositoryURL: repoURL,
+					Tools:         len(server.Tools),
+					Attributes:    server.Attributes,
+					EnvSchema:     server.EnvironmentVariablesJSONSchema,
 				})
 			}
 
