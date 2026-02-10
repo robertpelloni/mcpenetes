@@ -22,6 +22,8 @@ Think of mcpenetes as your friendly neighborhood wizard who can:
 - 🏥 Diagnose system health with the `doctor` command
 - 🧩 **New!** Define and manage custom clients directly from the UI
 
+For detailed instructions, see the [User Manual](docs/MANUAL.md).
+
 ## 🚀 Installation
 
 ### From Source

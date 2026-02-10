@@ -15,6 +15,7 @@ import (
 	"github.com/tuannvm/mcpenetes/internal/core"
 	"github.com/tuannvm/mcpenetes/internal/doctor"
 	"github.com/tuannvm/mcpenetes/internal/log"
+	"github.com/tuannvm/mcpenetes/internal/mcp"
 	"github.com/tuannvm/mcpenetes/internal/registry"
 	"github.com/tuannvm/mcpenetes/internal/registry/manager"
 	"github.com/tuannvm/mcpenetes/internal/search"
@@ -60,6 +61,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/registry/update", s.handleUpdateRegistry)
 	mux.HandleFunc("/api/registry/remove", s.handleRemoveRegistry)
 	mux.HandleFunc("/api/server/inspect", s.handleInspectServer)
+	mux.HandleFunc("/api/server/test", s.handleTestServer) // Added Test Server Endpoint
 	mux.HandleFunc("/api/backups", s.handleGetBackups)
 	mux.HandleFunc("/api/restore", s.handleRestoreBackup)
 	mux.HandleFunc("/api/import", s.handleImportConfig)
@@ -120,6 +122,10 @@ type InspectRequest struct {
 	Config   config.MCPServer `json:"config"`
 }
 
+type TestServerRequest struct {
+	Config config.MCPServer `json:"config"`
+}
+
 type ApplyResponse struct {
 	Results []core.ApplyResult `json:"results"`
 }
@@ -147,8 +153,9 @@ type RemoveCustomClientRequest struct {
 }
 
 type SettingsRequest struct {
-	BackupPath      string `json:"backupPath"`
-	BackupRetention int    `json:"backupRetention"`
+	BackupPath      string            `json:"backupPath"`
+	BackupRetention int               `json:"backupRetention"`
+	GlobalEnv       map[string]string `json:"globalEnv"`
 }
 
 func (s *Server) handleGetData(w http.ResponseWriter, r *http.Request) {
@@ -204,6 +211,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(SettingsRequest{
 		BackupPath:      cfg.Backups.Path,
 		BackupRetention: cfg.Backups.Retention,
+		GlobalEnv:       cfg.GlobalEnv,
 	})
 }
 
@@ -227,6 +235,8 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if req.BackupRetention >= 0 {
 		cfg.Backups.Retention = req.BackupRetention
 	}
+	// Always update GlobalEnv (it might be empty)
+	cfg.GlobalEnv = req.GlobalEnv
 
 	if err := config.SaveConfig(cfg); err != nil {
 		http.Error(w, fmt.Sprintf("Error saving config: %v", err), http.StatusInternalServerError)
@@ -593,6 +603,23 @@ func (s *Server) handleInspectServer(w http.ResponseWriter, r *http.Request) {
 		"command": cmdStr,
 		"message": "To inspect this server, run the following command in your terminal:",
 	})
+}
+
+func (s *Server) handleTestServer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req TestServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	result := mcp.PingServer(req.Config)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func (s *Server) handleGetBackups(w http.ResponseWriter, r *http.Request) {

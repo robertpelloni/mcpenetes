@@ -617,9 +617,23 @@ func (t *Translator) createServerMap(serverConf config.MCPServer) map[string]int
 	if len(serverConf.Args) > 0 {
 		serverEntry["args"] = serverConf.Args
 	}
-	if len(serverConf.Env) > 0 {
-		serverEntry["env"] = serverConf.Env
+
+	// Merge global env with server env
+	// Server env takes precedence
+	mergedEnv := make(map[string]string)
+	if t.AppConfig.GlobalEnv != nil {
+		for k, v := range t.AppConfig.GlobalEnv {
+			mergedEnv[k] = v
+		}
 	}
+	for k, v := range serverConf.Env {
+		mergedEnv[k] = v
+	}
+
+	if len(mergedEnv) > 0 {
+		serverEntry["env"] = mergedEnv
+	}
+
 	if serverConf.URL != "" {
 		serverEntry["url"] = serverConf.URL
 	}

@@ -7,6 +7,7 @@ type Config struct {
 	MCPs       []string          `yaml:"mcps"`
 	Clients    map[string]Client `yaml:"clients"`
 	Backups    BackupConfig      `yaml:"backups"`
+	GlobalEnv  map[string]string `yaml:"global_env,omitempty"`
 }
 
 // Registry defines a registry endpoint

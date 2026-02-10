@@ -246,6 +246,17 @@
                             <small>Number of backups to keep per client. Older backups are deleted automatically.</small>
                         </div>
                     </div>
+                    <hr>
+                    <h4>Global Environment Variables</h4>
+                    <p>These variables will be injected into every server configuration unless overridden by server-specific settings.</p>
+                    <div id="globalEnvContainer">
+                        <div class="grid" style="margin-bottom: 0.5rem;">
+                            <input type="text" placeholder="Key (e.g. OPENAI_API_KEY)" class="env-key">
+                            <input type="text" placeholder="Value" class="env-value">
+                        </div>
+                    </div>
+                    <button class="secondary outline small" onclick="addGlobalEnvField()">+ Add Variable</button>
+                    <hr>
                     <button onclick="saveSettings()">Save Settings</button>
                 </div>
             </section>
@@ -254,6 +265,7 @@
         <div id="help" class="tab-content">
             <section>
                 <h3>Help & Documentation</h3>
+                <p>For detailed instructions, please refer to the <a href="https://github.com/tuannvm/mcpenetes/blob/main/docs/MANUAL.md" target="_blank">Full User Manual</a>.</p>
                 <article>
                     <h4>🚀 Getting Started</h4>
                     <p><strong>mcpenetes</strong> is your central hub for managing Model Context Protocol (MCP) servers across all your development tools.</p>
@@ -367,6 +379,7 @@
                                 <strong>${name}</strong>: ${details}
                             </div>
                             <div style="flex-shrink: 0;">
+                                <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="testServer('${name}')" id="test-btn-${name}" title="Test connection to server">⚡ Test</button>
                                 <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="inspectServer('${name}')" title="View the command to run this server manually">🔍 Inspect</button>
                                 <button class="outline small" style="width: auto; padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="openEditModal('${name}')" title="Edit server configuration (JSON)">Edit</button>
                                 <button class="outline small error" style="width: auto; padding: 0.25rem 0.5rem; color: var(--del-color); border-color: var(--del-color);" onclick="deleteServer('${name}')" title="Remove this server from configuration">Delete</button>
@@ -649,14 +662,42 @@
 
                 const data = await res.json();
                 if (data.status === 'success') {
-                    // Create a temporary modal or alert with the command
-                    // Using a prompt allows easy copying
                     prompt(data.message, data.command);
                 } else {
                     alert("Failed to get inspection command.");
                 }
             } catch (e) {
                 alert("Error: " + e);
+            }
+        }
+
+        async function testServer(serverID) {
+            const server = configData.mcpServers[serverID];
+            if (!server) return;
+
+            const btn = document.getElementById(`test-btn-${serverID}`);
+            const originalText = btn.innerText;
+            btn.setAttribute('aria-busy', 'true');
+            btn.innerText = "Testing...";
+
+            try {
+                const res = await fetch('/api/server/test', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({config: server})
+                });
+
+                const result = await res.json();
+                if (result.success) {
+                    showToast(`✅ Connected! Latency: ${result.latency/1000000}ms. Version: ${result.version || 'Unknown'}`, 'success');
+                } else {
+                    showToast(`❌ Failed: ${result.message}`, 'error');
+                }
+            } catch (e) {
+                showToast("Error: " + e, 'error');
+            } finally {
+                btn.removeAttribute('aria-busy');
+                btn.innerText = originalText;
             }
         }
 
@@ -1194,9 +1235,33 @@
                 const data = await res.json();
                 document.getElementById('settingBackupPath').value = data.backupPath;
                 document.getElementById('settingBackupRetention').value = data.backupRetention;
+
+                // Load global env
+                const container = document.getElementById('globalEnvContainer');
+                container.innerHTML = '';
+                if (data.globalEnv && Object.keys(data.globalEnv).length > 0) {
+                    for (const [key, value] of Object.entries(data.globalEnv)) {
+                        addGlobalEnvField(key, value);
+                    }
+                } else {
+                    addGlobalEnvField(); // Add one empty row
+                }
             } catch(e) {
                 showToast("Failed to load settings: " + e, 'error');
             }
+        }
+
+        function addGlobalEnvField(key = '', value = '') {
+            const container = document.getElementById('globalEnvContainer');
+            const div = document.createElement('div');
+            div.className = 'grid';
+            div.style.marginBottom = '0.5rem';
+            div.innerHTML = `
+                <input type="text" placeholder="Key" class="env-key" value="${key}">
+                <input type="text" placeholder="Value" class="env-value" value="${value}">
+                <button class="outline error" style="width:auto; padding:0 1rem;" onclick="this.parentElement.remove()">X</button>
+            `;
+            container.appendChild(div);
         }
 
         async function saveSettings() {
@@ -1208,11 +1273,25 @@
                 return;
             }
 
+            // Collect env vars
+            const globalEnv = {};
+            document.querySelectorAll('#globalEnvContainer .grid').forEach(row => {
+                const key = row.querySelector('.env-key').value.trim();
+                const value = row.querySelector('.env-value').value.trim();
+                if (key) {
+                    globalEnv[key] = value;
+                }
+            });
+
             try {
                 const res = await fetch('/api/settings', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({backupPath: path, backupRetention: retention})
+                    body: JSON.stringify({
+                        backupPath: path,
+                        backupRetention: retention,
+                        globalEnv: globalEnv
+                    })
                 });
 
                 if (res.ok) {
