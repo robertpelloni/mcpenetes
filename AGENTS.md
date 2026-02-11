@@ -1,44 +1,57 @@
-# 🤖 AI Agent & Developer Instructions
+# 🤖 mcpenetes Developer & Agent Instructions
 
-## 🗺️ Universal Context
 **mcpenetes** is the universal configuration manager for the Model Context Protocol (MCP) ecosystem. It supports 30+ clients (IDEs, CLIs, Desktop Apps) and provides a unified interface (CLI & Web UI) to manage their configurations.
 
-*   **Primary Goal:** Ensure complete, robust, and well-documented support for all MCP clients.
-*   **Vision:** See `VISION.md` for the ultimate goal and design philosophy.
-*   **Architecture:** See `HANDOFF.md` for current implementation details.
+## 🌟 Vision & Mission
+*   **Mission:** Be the "Kubernetes for MCP" - a single control plane for managing MCP servers across diverse clients.
+*   **Goal:** 100% feature completeness, robust error handling, comprehensive documentation, and a seamless user experience.
+*   **Core Principles:** Universality, Safety (Backup first), Simplicity (Web UI), and Extensibility (Custom Clients).
 
-## 🛠️ Workflow Protocols
-1.  **Autonomous Execution:** Plan, execute, verify, and commit autonomously. Do not stop for confirmation unless blocked.
-2.  **Documentation First:** Every feature must have UI documentation (tooltips/help tab) and markdown documentation (`README.md`, `Help`).
+## 📂 Architecture & Tech Stack
+*   **Language:** Go (Golang) 1.22+
+*   **UI:** Standard library `net/http` + Embedded `static/index.html` (HTML/CSS/JS). No external frontend frameworks.
+*   **CLI:** `spf13/cobra`.
+*   **Configuration:** YAML (`config.yaml`) + JSON/JSONC (`mcp.json`).
+*   **Key Packages:**
+    *   `internal/core`: Business logic (Manager, Backup, Restore, Import).
+    *   `internal/client`: Client detection (`registry.go`) and custom client management (`custom.go`).
+    *   `internal/mcp`: Server connectivity testing (`pinger.go`).
+    *   `internal/sync`: Cloud synchronization via GitHub Gists (`gist.go`).
+    *   `internal/ui`: Web server endpoints and static assets.
+
+## 🛠️ Workflow Protocols (Strict)
+1.  **Autonomous Execution:** Plan, execute, verify, and commit autonomously. Do not pause unless blocked.
+2.  **Documentation First:** Update `MANUAL.md` and `README.md` *before* or *during* feature implementation. Ensure UI tooltips are present.
 3.  **Versioning:**
-    *   Increment `internal/version/VERSION` for every significant change.
-    *   Update `CHANGELOG.md` to reflect the new version and changes.
-    *   Git commit message should reference the change.
-4.  **Submodules:** Check for submodules (`git submodule status`) and update them if present. Maintain a dashboard/list of submodules in the UI.
-5.  **Testing:**
-    *   Backend: `go test ./...`
-    *   Frontend: Write temporary Playwright scripts (`verify_ui.py`) to visually verify changes.
-    *   System Health: Run `go run main.go doctor` to ensure environment integrity.
+    *   Update `internal/version/version.go` for every feature/fix.
+    *   Update `CHANGELOG.md` with a detailed entry.
+    *   Commit message format: `feat: description` or `fix: description`.
+4.  **Testing:**
+    *   Run `go test ./...` before every commit.
+    *   Verify UI changes visually (using temporary Playwright scripts if needed).
+    *   Run `mcpenetes doctor` to check health.
+5.  **Submodules:** Check `git submodule status` and ensure submodules are synced if present.
+6.  **Code Hygiene:**
+    *   **NEVER commit binary artifacts** (add to `.gitignore`).
+    *   Use `hujson` for parsing configs to support comments.
+    *   Use `sync.Mutex` for shared resources.
 
-## 📂 Project Structure
-*   `cmd/`: CLI command definitions (cobra).
-*   `internal/client/`: Client registry (`registry.go`) and custom client logic (`custom.go`).
-*   `internal/config/`: Configuration structs and persistence logic.
-*   `internal/core/`: Business logic (Backup, Restore, Import, Apply).
-*   `internal/doctor/`: System health checks.
-*   `internal/ui/`: Web UI server and static assets (`static/index.html`).
-*   `internal/version/`: Version string source of truth.
-
-## 💡 Code Guidelines
-*   **Safety:** Use `hujson` for JSON parsing (supports comments). Always backup before overwriting user files.
-*   **Concurrency:** Use `sync.Mutex` for shared resources (e.g., logging buffer).
-*   **Cross-Platform:** Use `filepath.Join` and OS-specific base paths (`BaseHome`, `BaseAppData`).
-*   **Error Handling:** Return meaningful errors and log them appropriately.
+## 🗺️ Feature Checklist (Current Status)
+- [x] **Web UI:** Dashboard, Search, Clients, Backups, Logs, Settings, Sync, System, Help.
+- [x] **Backend:** Apply Logic, Custom Clients, Registry Management, Backup Retention.
+- [x] **Connectivity:** Server Ping (Test button).
+- [x] **Config:** Global Environment Variables.
+- [x] **Sync:** GitHub Gist (Push/Pull).
+- [x] **Docs:** Comprehensive Manual (`docs/MANUAL.md`).
 
 ## 🔄 Release Procedure
-1.  Run tests: `go test ./...`
-2.  Verify UI (if changed).
-3.  Update `internal/version/VERSION`.
-4.  Update `CHANGELOG.md`.
-5.  Commit: `feat: description` or `fix: description`.
-6.  Push.
+1.  **Verify:** Run tests and UI checks.
+2.  **Bump Version:** Increment `internal/version/version.go`.
+3.  **Changelog:** Add entry to `CHANGELOG.md`.
+4.  **Dashboard:** Update submodule dashboard (System tab covers this dynamically).
+5.  **Commit & Push:** `git commit -am "chore: release vX.Y.Z ..."` -> `git push`.
+
+## 🤖 Model-Specific Instructions
+*   **Claude/Anthropic:** Focus on maintaining the "Vision" and "Architecture" alignment.
+*   **GPT/OpenAI:** Focus on code correctness and error handling logic.
+*   **Gemini/Google:** Focus on documentation depth and extensive analysis.

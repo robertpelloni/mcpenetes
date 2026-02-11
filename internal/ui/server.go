@@ -907,23 +907,9 @@ type SystemInfoResponse struct {
 }
 
 func (s *Server) handleGetSystemInfo(w http.ResponseWriter, r *http.Request) {
-	// Static project structure for documentation
-	structure := `
-.
-├── cmd/                # CLI commands
-├── internal/
-│   ├── client/         # Client registry & detection
-│   ├── config/         # Configuration management
-│   ├── core/           # Core logic (Backup, Restore, etc.)
-│   ├── doctor/         # System health checks
-│   ├── log/            # Logging utilities
-│   ├── ui/             # Web UI server
-│   └── version/        # Version info
-└── main.go             # Entry point
-`
-	// In a real scenario, we might shell out to git submodule status
-	// For now, returning empty list as none are checked out
-	submodules := []string{}
+	cwd, _ := os.Getwd()
+	structure, _ := util.GenerateProjectStructure(cwd)
+	submodules := util.GetSubmodules()
 
 	resp := SystemInfoResponse{
 		AppVersion:       version.Version,
