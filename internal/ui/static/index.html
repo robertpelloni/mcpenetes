@@ -33,6 +33,7 @@
                 <li><a href="#" onclick="switchTab('logs')">Logs</a></li>
                 <li><a href="#" onclick="switchTab('system')">System</a></li>
                 <li><a href="#" onclick="switchTab('settings')">Settings</a></li>
+                <li><a href="#" onclick="switchTab('sync')">Cloud Sync</a></li>
                 <li><a href="#" onclick="switchTab('help')">Help</a></li>
                 <li><a href="#" onclick="openImportModal()">Import</a></li>
                 <li><a href="#" onclick="loadData(); checkDoctor();">Refresh</a></li>
@@ -226,6 +227,44 @@
                 <h4>Project Structure</h4>
                 <div class="card">
                     <pre id="sysStructure" style="background:none; border:none; padding:0; margin:0;">Loading...</pre>
+                </div>
+            </section>
+        </div>
+
+        <div id="sync" class="tab-content">
+            <section>
+                <h3>Cloud Synchronization (GitHub Gist)</h3>
+                <p>Sync your configuration across multiple machines using a private GitHub Gist.</p>
+
+                <div id="syncUnlinked" style="display:none;">
+                    <div class="card">
+                        <h4>Connect to GitHub</h4>
+                        <label for="githubToken">GitHub Personal Access Token (PAT)</label>
+                        <input type="password" id="githubToken" placeholder="ghp_...">
+                        <small>Token needs <code>gist</code> scope.</small>
+                        <button onclick="setupSync()">Link GitHub Account</button>
+                    </div>
+                </div>
+
+                <div id="syncLinked" style="display:none;">
+                    <div class="grid">
+                        <div class="card">
+                            <h4>Status</h4>
+                            <ul>
+                                <li><strong>Status:</strong> <span class="success">✅ Linked</span></li>
+                                <li><strong>Gist ID:</strong> <span id="syncGistID">Loading...</span></li>
+                                <li><strong>Last Synced:</strong> <span id="syncLastTime">Never</span></li>
+                            </ul>
+                        </div>
+                        <div class="card">
+                            <h4>Actions</h4>
+                            <div class="grid">
+                                <button onclick="syncPush()" class="outline">☁️ Push to Cloud</button>
+                                <button onclick="syncPull()" class="outline">📥 Pull from Cloud</button>
+                            </div>
+                            <small>Push uploads your local config. Pull overwrites local config (after backup).</small>
+                        </div>
+                    </div>
                 </div>
             </section>
         </div>
@@ -1201,6 +1240,7 @@
             if (tabId === 'clients') loadCustomClients();
             if (tabId === 'system') loadSystemInfo();
             if (tabId === 'settings') loadSettings();
+            if (tabId === 'sync') loadSyncStatus();
         }
 
 
@@ -1302,6 +1342,75 @@
             } catch(e) {
                 showToast("Error: " + e, 'error');
             }
+        }
+
+        async function loadSyncStatus() {
+            try {
+                const res = await fetch('/api/sync/status');
+                const data = await res.json();
+
+                if (data.linked) {
+                    document.getElementById('syncUnlinked').style.display = 'none';
+                    document.getElementById('syncLinked').style.display = 'block';
+                    document.getElementById('syncGistID').innerText = data.gistId || "Not created yet";
+                    document.getElementById('syncLastTime').innerText = data.lastSynced ? new Date(data.lastSynced).toLocaleString() : "Never";
+                } else {
+                    document.getElementById('syncUnlinked').style.display = 'block';
+                    document.getElementById('syncLinked').style.display = 'none';
+                }
+            } catch(e) {
+                console.error("Sync status check failed", e);
+            }
+        }
+
+        async function setupSync() {
+            const token = document.getElementById('githubToken').value;
+            if (!token) {
+                alert("Token required");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/sync/setup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token: token})
+                });
+                if (res.ok) {
+                    showToast("Linked successfully!", 'success');
+                    loadSyncStatus();
+                } else {
+                    alert("Failed: " + await res.text());
+                }
+            } catch(e) { alert("Error: " + e); }
+        }
+
+        async function syncPush() {
+            if(!confirm("Overwrite Cloud config with Local config?")) return;
+            try {
+                showToast("Pushing to Gist...", 'info');
+                const res = await fetch('/api/sync/push', { method: 'POST' });
+                if (res.ok) {
+                    showToast("Push successful!", 'success');
+                    loadSyncStatus();
+                } else {
+                    showToast("Push failed: " + await res.text(), 'error');
+                }
+            } catch(e) { showToast("Error: " + e, 'error'); }
+        }
+
+        async function syncPull() {
+            if(!confirm("Overwrite Local config with Cloud config? This will restart the app.")) return;
+            try {
+                showToast("Pulling from Gist...", 'info');
+                const res = await fetch('/api/sync/pull', { method: 'POST' });
+                if (res.ok) {
+                    showToast("Pull successful! Reloading...", 'success');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showToast("Pull failed: " + await res.text(), 'error');
+                }
+            } catch(e) { showToast("Error: " + e, 'error'); }
         }
 
         function renderClients() {

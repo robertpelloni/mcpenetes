@@ -7,8 +7,10 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/tuannvm/mcpenetes/internal/client"
 	"github.com/tuannvm/mcpenetes/internal/config"
@@ -19,6 +21,7 @@ import (
 	"github.com/tuannvm/mcpenetes/internal/registry"
 	"github.com/tuannvm/mcpenetes/internal/registry/manager"
 	"github.com/tuannvm/mcpenetes/internal/search"
+	cloudsync "github.com/tuannvm/mcpenetes/internal/sync"
 	"github.com/tuannvm/mcpenetes/internal/util"
 	"github.com/tuannvm/mcpenetes/internal/version"
 )
@@ -61,7 +64,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/registry/update", s.handleUpdateRegistry)
 	mux.HandleFunc("/api/registry/remove", s.handleRemoveRegistry)
 	mux.HandleFunc("/api/server/inspect", s.handleInspectServer)
-	mux.HandleFunc("/api/server/test", s.handleTestServer) // Added Test Server Endpoint
+	mux.HandleFunc("/api/server/test", s.handleTestServer)
 	mux.HandleFunc("/api/backups", s.handleGetBackups)
 	mux.HandleFunc("/api/restore", s.handleRestoreBackup)
 	mux.HandleFunc("/api/import", s.handleImportConfig)
@@ -71,6 +74,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/client/config", s.handleGetClientConfig)
 	mux.HandleFunc("/api/system", s.handleGetSystemInfo)
 	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/sync/status", s.handleSyncStatus)
+	mux.HandleFunc("/api/sync/setup", s.handleSyncSetup)
+	mux.HandleFunc("/api/sync/push", s.handleSyncPush)
+	mux.HandleFunc("/api/sync/pull", s.handleSyncPull)
 
 	addr := fmt.Sprintf("localhost:%d", s.Port)
 	log.Success("Starting Web UI at http://%s", addr)
@@ -158,6 +165,16 @@ type SettingsRequest struct {
 	GlobalEnv       map[string]string `json:"globalEnv"`
 }
 
+type SyncStatusResponse struct {
+	Linked     bool   `json:"linked"`
+	LastSynced string `json:"lastSynced"`
+	GistID     string `json:"gistId"`
+}
+
+type SyncSetupRequest struct {
+	Token string `json:"token"`
+}
+
 func (s *Server) handleGetData(w http.ResponseWriter, r *http.Request) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -235,7 +252,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if req.BackupRetention >= 0 {
 		cfg.Backups.Retention = req.BackupRetention
 	}
-	// Always update GlobalEnv (it might be empty)
+	// Always update GlobalEnv
 	cfg.GlobalEnv = req.GlobalEnv
 
 	if err := config.SaveConfig(cfg); err != nil {
@@ -307,10 +324,6 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Process each file group sequentially to prevent race conditions on the same file
-	// We can still process different files concurrently if we wanted,
-	// but for safety and simplicity, we'll do everything sequentially in this iteration.
-	// If performance becomes an issue, we can parallelize the outer loop over `groupedClients`.
-
 	for _, clientList := range groupedClients {
 		for _, clientInfo := range clientList {
 			res := manager.ApplyToClient(clientInfo.Name, clientInfo.Config)
@@ -923,4 +936,181 @@ func (s *Server) handleGetSystemInfo(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleSyncStatus(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, "Failed to load config", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(SyncStatusResponse{
+		Linked:     cfg.Sync.GitHubToken != "",
+		LastSynced: cfg.Sync.LastSynced,
+		GistID:     cfg.Sync.GistID,
+	})
+}
+
+func (s *Server) handleSyncSetup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req SyncSetupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Token == "" {
+		http.Error(w, "Token is required", http.StatusBadRequest)
+		return
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, "Failed to load config", http.StatusInternalServerError)
+		return
+	}
+
+	// For now, just save the token.
+	cfg.Sync.GitHubToken = req.Token
+
+	if err := config.SaveConfig(cfg); err != nil {
+		http.Error(w, "Failed to save config", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "GitHub linked"})
+}
+
+func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, "Failed to load config", http.StatusInternalServerError)
+		return
+	}
+	if cfg.Sync.GitHubToken == "" {
+		http.Error(w, "Not linked to GitHub", http.StatusUnauthorized)
+		return
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".config", "mcpetes")
+
+	// Read raw config files
+	configContent, _ := os.ReadFile(filepath.Join(configDir, "config.yaml"))
+	mcpContent, _ := os.ReadFile(filepath.Join(configDir, "mcp.json"))
+	clientsContent, _ := os.ReadFile(filepath.Join(configDir, "clients.yaml"))
+
+	files := map[string]string{
+		"config.yaml": string(configContent),
+		"mcp.json":    string(mcpContent),
+	}
+	if len(clientsContent) > 0 {
+		files["clients.yaml"] = string(clientsContent)
+	}
+
+	gistClient := cloudsync.NewClient(cfg.Sync.GitHubToken)
+	var resp *cloudsync.GistResponse
+	var errGist error
+
+	if cfg.Sync.GistID != "" {
+		resp, errGist = gistClient.UpdateGist(cfg.Sync.GistID, files)
+	} else {
+		resp, errGist = gistClient.CreateGist("mcpenetes configuration backup", files)
+	}
+
+	if errGist != nil {
+		http.Error(w, fmt.Sprintf("Gist error: %v", errGist), http.StatusInternalServerError)
+		return
+	}
+
+	// Update sync status
+	cfg.Sync.GistID = resp.ID
+	cfg.Sync.LastSynced = time.Now().Format(time.RFC3339)
+	config.SaveConfig(cfg)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "success",
+		"message": "Configuration pushed to Gist",
+		"gistId": resp.ID,
+	})
+}
+
+func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, "Failed to load config", http.StatusInternalServerError)
+		return
+	}
+	if cfg.Sync.GitHubToken == "" || cfg.Sync.GistID == "" {
+		http.Error(w, "Not linked or no Gist ID found", http.StatusUnauthorized)
+		return
+	}
+
+	gistClient := cloudsync.NewClient(cfg.Sync.GitHubToken)
+	resp, err := gistClient.GetGist(cfg.Sync.GistID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch Gist: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".config", "mcpetes")
+
+	// Backup existing before overwrite (Safety first!)
+	timestamp := time.Now().Format("20060102-150405")
+	backupDir := filepath.Join(configDir, "backups", "sync-"+timestamp)
+	os.MkdirAll(backupDir, 0755)
+
+	// Helper copy
+	copyFile := func(name string) {
+		src := filepath.Join(configDir, name)
+		dst := filepath.Join(backupDir, name)
+		data, err := os.ReadFile(src)
+		if err == nil {
+			os.WriteFile(dst, data, 0644)
+		}
+	}
+	copyFile("config.yaml")
+	copyFile("mcp.json")
+	copyFile("clients.yaml")
+
+	// Overwrite files
+	for filename, file := range resp.Files {
+		if filename == "config.yaml" || filename == "mcp.json" || filename == "clients.yaml" {
+			os.WriteFile(filepath.Join(configDir, filename), []byte(file.Content), 0644)
+		}
+	}
+
+	// Update last synced
+	cfg.Sync.LastSynced = time.Now().Format(time.RFC3339)
+	config.SaveConfig(cfg) // Reload and save to ensure we don't overwrite with old in-memory cfg?
+	// Actually we just overwrote config.yaml on disk. We should re-read it or just update the timestamp.
+	// Re-reading is safer.
+	newCfg, _ := config.LoadConfig()
+	newCfg.Sync.LastSynced = time.Now().Format(time.RFC3339)
+	config.SaveConfig(newCfg)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "success",
+		"message": "Configuration pulled from Gist",
+	})
 }

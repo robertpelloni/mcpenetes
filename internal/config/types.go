@@ -8,6 +8,14 @@ type Config struct {
 	Clients    map[string]Client `yaml:"clients"`
 	Backups    BackupConfig      `yaml:"backups"`
 	GlobalEnv  map[string]string `yaml:"global_env,omitempty"`
+	Sync       SyncConfig        `yaml:"sync,omitempty"`
+}
+
+// SyncConfig defines cloud synchronization settings
+type SyncConfig struct {
+	GitHubToken string `yaml:"github_token,omitempty"`
+	GistID      string `yaml:"gist_id,omitempty"`
+	LastSynced  string `yaml:"last_synced,omitempty"` // Timestamp
 }
 
 // Registry defines a registry endpoint
