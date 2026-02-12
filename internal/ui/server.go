@@ -24,6 +24,7 @@ import (
 	cloudsync "github.com/tuannvm/mcpenetes/internal/sync"
 	"github.com/tuannvm/mcpenetes/internal/util"
 	"github.com/tuannvm/mcpenetes/internal/version"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed static/*
@@ -993,13 +994,26 @@ func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request) {
 	homeDir, _ := os.UserHomeDir()
 	configDir := filepath.Join(homeDir, ".config", "mcpetes")
 
-	// Read raw config files
-	configContent, _ := os.ReadFile(filepath.Join(configDir, "config.yaml"))
+	// Prepare config.yaml with redacted token
+	cfgToUpload, err := config.LoadConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load config for upload: %v", err), http.StatusInternalServerError)
+		return
+	}
+	// Redact sensitive info
+	cfgToUpload.Sync.GitHubToken = ""
+
+	configBytes, err := yaml.Marshal(cfgToUpload)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to marshal config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
 	mcpContent, _ := os.ReadFile(filepath.Join(configDir, "mcp.json"))
 	clientsContent, _ := os.ReadFile(filepath.Join(configDir, "clients.yaml"))
 
 	files := map[string]string{
-		"config.yaml": string(configContent),
+		"config.yaml": string(configBytes),
 		"mcp.json":    string(mcpContent),
 	}
 	if len(clientsContent) > 0 {
@@ -1022,6 +1036,7 @@ func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update sync status
+	// Note: We update the LOCAL config (which still has the token) with the new GistID/Time
 	cfg.Sync.GistID = resp.ID
 	cfg.Sync.LastSynced = time.Now().Format(time.RFC3339)
 	config.SaveConfig(cfg)
@@ -1049,6 +1064,9 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Not linked or no Gist ID found", http.StatusUnauthorized)
 		return
 	}
+
+	// Store current token to restore it after pull
+	currentToken := cfg.Sync.GitHubToken
 
 	gistClient := cloudsync.NewClient(cfg.Sync.GitHubToken)
 	resp, err := gistClient.GetGist(cfg.Sync.GistID)
@@ -1085,14 +1103,21 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update last synced
-	cfg.Sync.LastSynced = time.Now().Format(time.RFC3339)
-	config.SaveConfig(cfg) // Reload and save to ensure we don't overwrite with old in-memory cfg?
-	// Actually we just overwrote config.yaml on disk. We should re-read it or just update the timestamp.
-	// Re-reading is safer.
-	newCfg, _ := config.LoadConfig()
+	// Update last synced and RESTORE TOKEN
+	newCfg, err := config.LoadConfig()
+	if err != nil {
+		// Should not happen as we just wrote it
+		http.Error(w, fmt.Sprintf("Failed to reload config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	newCfg.Sync.GitHubToken = currentToken // Restore token from memory
 	newCfg.Sync.LastSynced = time.Now().Format(time.RFC3339)
-	config.SaveConfig(newCfg)
+
+	if err := config.SaveConfig(newCfg); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to save restored config: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
